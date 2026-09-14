@@ -63,6 +63,18 @@ for (const [size, dist, t, pitch, R] of GROUND) {
   }
 }
 
+const SCENES = [['strafe', 'rotary', [2, 4]], ['barrage', 'bofors', [6]], ['finale', 'howitzer', [3, 9, 14.5, 17.4, 19, 24]]];
+for (const [id, gun, times] of SCENES) {
+  for (const t of times) {
+    for (const filter of ['normal', 'night', 'thermal']) {
+      await shot(`scene-${id}-${String(Math.round(t * 10)).padStart(4, '0')}-${filter}`, `(() => {
+        Object.assign(lab.state, { view: 'top', gun: '${gun}', filter: '${filter}', planetR: 0 });
+        lab.advance('${id}', ${t});
+      })()`);
+    }
+  }
+}
+
 await page.evaluate(() => { Object.assign(lab.state, { view: 'top', gun: 'bofors', filter: 'normal', planetR: 0, paused: false }); lab.clearAll(); lab.syncButtons(); });
 await page.evaluate(() => lab.leakTest());
 await page.waitForFunction(() => /clean|LEAK/.test(document.getElementById('out').textContent), null, { timeout: 60000 });

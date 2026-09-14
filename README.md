@@ -19,11 +19,20 @@ The lab has:
 - a seat camera 340 m up, using each gun's zoom: rotary 23.1°, Bofors 31.5°, 105 mm 46.2°
 - a ground camera at 2 m eye height, 30 to 300 m out; drag to look around
 - the game's bloom (UnrealBloom 0.3 / 0.5 / 0.2), with a phone tier that uses half-resolution mips
-- the normal, night and thermal CSS filters (keys `1` `2` `3`)
+- the normal and night CSS filters, plus two thermal views (keys `1` to `4`):
+  - **thermal FLIR** (the default): an ironbow palette running from indigo through magenta, orange and yellow to white. It's an SVG filter, `url(#flir)` in `index.html`, that converts to grayscale and remaps brightness through a colour table.
+  - **game thermal**: the brief's original sepia chain, kept for comparison
 - a flat ground or a 753 m planet
 - a candidate list, spawn buttons, click-to-spawn and a typed seed
 - time scale, pause, step and pose-at-ms
-- a load test (12 small, or 12 small + medium + large)
+- load scenarios (`lab/scenarios.js`):
+  - `12 S` and `12 S + M + L`: the measurement benchmarks
+  - `strafe`: rotary bursts walking along the ground
+  - `strafe + M + L`
+  - `barrage`: two rotary streams, Bofors 4/s, a 105 every 1.5 s
+  - `finale`: a 28 s sequence that escalates, stops firing, and ends with the orbital strike
+
+  Every shot position comes from its own seed, and `lab.advance(id, seconds)` jumps to any moment of a scenario.
 - a cost measurement and a leak test
 
 `window.lab` exposes the same controls to scripts.
@@ -85,6 +94,10 @@ The contract tests need no GPU. They check:
 - no globals
 
 `shoot.mjs` poses every size at fixed times in all three filters, top-down and from the ground. It also runs the leak test and, with `--measure`, the cost measurement at 1× and 4× CPU throttle.
+
+## Thermal view for the game
+
+To use the FLIR look in the game, copy the `<svg><filter id="flir">` block from `index.html` into the game page, then set the thermal view's filter to `url(#flir)`. That replaces the CSS chain. Its cost hasn't been measured: SVG filters on a WebGL canvas can be slower than the built-in CSS filter functions on some browsers. If it's too slow on phones, the fallback is the same colour table in the bloom composer's final shader pass.
 
 ## Known gaps
 

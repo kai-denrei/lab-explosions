@@ -36,6 +36,17 @@
 </script>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- FLIR ironbow thermal: luminance (CSS grayscale weights) through a colour table -->
+  <filter id="flir" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0.020 0.114 0.290 0.541 0.761 0.910 0.973 0.988 0.992 1.000 1.000"/>
+      <feFuncG type="table" tableValues="0.008 0.039 0.043 0.059 0.114 0.251 0.439 0.639 0.827 0.953 1.000"/>
+      <feFuncB type="table" tableValues="0.102 0.369 0.541 0.604 0.494 0.290 0.118 0.063 0.227 0.604 1.000"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
 <div id="app">
   <div id="stage"><canvas id="c"></canvas><div id="hud"></div></div>
   <aside id="panel"></aside>

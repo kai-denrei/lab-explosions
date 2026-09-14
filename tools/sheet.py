@@ -45,4 +45,15 @@ if ground:
             label(cell, q.stem)
             sheet.paste(cell, (c * GW, r * GH))
     sheet.save(src / 'sheet-ground.png')
+scenes = sorted(src.glob('scene-*-normal.png'))
+if scenes:
+    SW, SH = 480, 270
+    sheet = Image.new('RGB', (SW * 3, SH * len(scenes)), (20, 20, 20))
+    for r, p in enumerate(scenes):
+        for c, f in enumerate(FILTERS):
+            q = src / p.name.replace('-normal', f'-{f}')
+            cell = Image.open(q).convert('RGB').resize((SW, SH), Image.LANCZOS)
+            label(cell, q.stem)
+            sheet.paste(cell, (c * SW, r * SH))
+    sheet.save(src / 'sheet-scenes.png')
 print('\n'.join(sorted(p.name for p in src.glob('sheet-*.png'))))

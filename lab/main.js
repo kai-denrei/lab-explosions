@@ -6,11 +6,15 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CANDIDATES } from './candidates.js';
+import { SCENARIOS } from './scenarios.js';
+import { mulberry32 } from '../explosions/common.js';
 
 const FILTERS = {
   normal: 'none',
   night: 'grayscale(1) brightness(0.62) contrast(1.7)',
-  thermal: 'grayscale(1) brightness(0.5) contrast(1.6) sepia(1) saturate(5) hue-rotate(-18deg)',
+  // FLIR ironbow: luminance through an SVG colour table (index.html #flir)
+  thermal: 'url(#flir)',
+  'thermal-game': 'grayscale(1) brightness(0.5) contrast(1.6) sepia(1) saturate(5) hue-rotate(-18deg)',
 };
 const GUN_FOV = { rotary: 23.1, bofors: 31.5, howitzer: 46.2 };
 const SIZES = ['small', 'medium', 'large', 'nuclear'];
@@ -174,22 +178,66 @@ function pose(size, tMs, seed = state.seed) {
   return fx;
 }
 
-// Load test: rotary fire keeps 12 smalls alive, plus 1 medium and 1 large.
-const load = { rand: 1000, acc: { small: 0, medium: 0, large: 0 } };
-const LOAD_PERIOD = { small: 0.4 / 12, medium: 1.2, large: 3 };
+// Load scenarios (lab/scenarios.js). Shot positions come from a per-shot seed,
+// so a scenario replays identically.
+const run = { id: null, t: 0, acc: [], fired: [], n: 0 };
+
+function startScenario(id) {
+  Object.assign(run, { id, t: 0, acc: [], fired: [], n: 0 });
+}
+
+function fire(e, t) {
+  const seed = 10000 + run.n++;
+  const [x, z] = e.pos(t, mulberry32(seed));
+  spawn(e.size, x, z, seed);
+}
+
 function runLoad(dt) {
-  const kinds = state.load === 'small' ? ['small'] : ['small', 'medium', 'large'];
-  for (const k of kinds) {
-    load.acc[k] += dt;
-    while (load.acc[k] >= LOAD_PERIOD[k] || (k !== 'small' && !live.some((e) => e.size === k))) {
-      load.acc[k] = Math.max(0, load.acc[k] - LOAD_PERIOD[k]);
-      const r = moduleFor('small') ? load.rand++ : 0;
-      const a = (r * 2.39996) % (Math.PI * 2);
-      const dist = 10 + (r * 7.31) % 50;
-      spawn(k, Math.cos(a) * dist, Math.sin(a) * dist, r);
-      if (k !== 'small') break;
+  const sc = SCENARIOS[state.load];
+  if (!sc) return;
+  if (run.id !== state.load) startScenario(state.load);
+  run.t += dt;
+  sc.emitters.forEach((e, i) => {
+    if (e.at !== undefined) {
+      if (!run.fired[i] && run.t >= e.at) { run.fired[i] = true; fire(e, e.at); }
+      return;
     }
+    if (run.t < (e.from ?? 0) || run.t >= (e.to ?? Infinity)) return;
+    const period = 1 / e.rate;
+    run.acc[i] = (run.acc[i] ?? period) + dt;
+    while (run.acc[i] >= period) {
+      run.acc[i] -= period;
+      const t = run.t - run.acc[i];
+      if (!e.gate || e.gate(t)) fire(e, t);
+    }
+  });
+  if (sc.duration && run.t >= sc.duration) {
+    state.load = 'off';
+    run.id = null;
+    syncButtons();
   }
+}
+
+function reap(dt) {
+  for (let i = live.length - 1; i >= 0; i--) {
+    const e = live[i];
+    e.fx.tick(dt);
+    if (!e.fx.alive()) { e.fx.dispose(); live.splice(i, 1); }
+  }
+}
+
+// Run a scenario forward to `seconds` without rendering, then pause: a
+// deterministic frame of a busy scene for screenshots.
+function advance(id, seconds, step = 1 / 60) {
+  clearAll();
+  state.load = id;
+  startScenario(id);
+  for (let s = 0; s + step / 2 < seconds; s += step) {
+    runLoad(step);
+    reap(step);
+  }
+  state.paused = true;
+  syncButtons();
 }
 
 // ------------------------------------------------------------------ loop
@@ -210,11 +258,7 @@ function frame(now) {
 
   const c0 = performance.now();
   if (state.load !== 'off' && dt > 0) runLoad(dt);
-  for (let i = live.length - 1; i >= 0; i--) {
-    const e = live[i];
-    e.fx.tick(dt);
-    if (!e.fx.alive()) { e.fx.dispose(); live.splice(i, 1); }
-  }
+  reap(dt);
   updateCameras();
   renderPass.camera = activeCam();
   renderer.info.reset();
@@ -244,7 +288,7 @@ function drawHud() {
     `fps ${fps.toFixed(0).padStart(3)}   frame ${mean(samples.frame).toFixed(2)} ms`,
     `work ${mean(samples.cpu).toFixed(2)} ms${state.syncGpu ? ' (GPU synced)' : ' (CPU submit)'}`,
     `draws ${info.render.calls} (fx ${fxDraws})  tris ${info.render.triangles}  lines ${info.render.lines}`,
-    `alive S${counts.small} M${counts.medium} L${counts.large} N${counts.nuclear}`,
+    `alive S${counts.small} M${counts.medium} L${counts.large} N${counts.nuclear}   load ${state.load}${state.load !== 'off' ? ` ${run.t.toFixed(1)} s` : ''}`,
     `geometries ${info.memory.geometries}  programs ${info.programs.length}`,
     state.view === 'top'
       ? `seat ${state.gun} ${GUN_FOV[state.gun]}°  frame ${frameH.toFixed(0)} m  ${pxPerM.toFixed(2)} px/m`
@@ -310,7 +354,7 @@ h2('Seed');
   r.append(ui.seed, fixed);
 }
 
-group('View filter  (1 2 3)', 'filter', [['normal', 'normal'], ['night', 'night'], ['thermal', 'thermal']]);
+group('View filter  (1 2 3 4)', 'filter', [['normal', 'normal'], ['night', 'night'], ['thermal', 'thermal FLIR'], ['thermal-game', 'game thermal']]);
 group('Camera  (T G)', 'view', [['top', 'seat 340 m'], ['ground', 'ground 2 m']]);
 group('Gun zoom (seat)', 'gun', [['rotary', 'rotary 23°'], ['bofors', 'bofors 32°'], ['howitzer', '105 46°']]);
 group('Ground distance  (drag to look)', 'groundDist', [[30, '30 m'], [80, '80 m'], [150, '150 m'], [300, '300 m']]);
@@ -353,7 +397,11 @@ function showMeta() {
   }
 }
 
-group('Load test', 'load', [['off', 'off'], ['small', '12 S'], ['full', '12 S + M + L']], () => { if (state.load === 'off') clearAll(); });
+group('Load test', 'load', [['off', 'off'], ...Object.entries(SCENARIOS).map(([id, sc]) => [id, sc.label])], () => {
+  run.id = null;
+  state.paused = false;
+  if (state.load === 'off') clearAll();
+});
 group('Bloom tier', 'bloomTier', [['desktop', 'desktop'], ['phone', 'phone ½ mips']], resize);
 group('Render scale', 'renderScale', [[1, '1'], [0.5, '0.5']], resize);
 group('Planet', 'planetR', [[0, 'flat'], [753, 'R 753 m']], clearAll);
@@ -390,8 +438,8 @@ async function measure() {
   };
   report('measuring… (≈14 s)');
   const base = await sample('off');
-  const small = await sample('small');
-  const full = await sample('full');
+  const small = await sample('bench-small');
+  const full = await sample('bench-full');
   Object.assign(state, saved);
   clearAll();
   syncButtons();
@@ -454,14 +502,14 @@ canvas.addEventListener('pointerup', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
-  const map = { 1: ['filter', 'normal'], 2: ['filter', 'night'], 3: ['filter', 'thermal'], t: ['view', 'top'], g: ['view', 'ground'] };
+  const map = { 1: ['filter', 'normal'], 2: ['filter', 'night'], 3: ['filter', 'thermal'], 4: ['filter', 'thermal-game'], t: ['view', 'top'], g: ['view', 'ground'] };
   if (map[e.key]) state[map[e.key][0]] = map[e.key][1];
   if (e.key === ' ') { state.paused = !state.paused; e.preventDefault(); }
   syncButtons();
 });
 
 // Automation hooks for screenshots and scripted checks.
-window.lab = { state, spawn, pose, clearAll, measure, leakTest, syncButtons, resize, renderer, live };
+window.lab = { state, spawn, pose, advance, clearAll, measure, leakTest, syncButtons, resize, renderer, live, run };
 
 showMeta();
 syncButtons();
