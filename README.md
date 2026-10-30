@@ -7,6 +7,31 @@ packages in the page.
 The brief is in [`docs/brief.md`](docs/brief.md). Research is in
 [`docs/research/`](docs/research/).
 
+Public lab: **https://kai-denrei.github.io/lab-explosions/** (GitHub Pages,
+published from `main` at the repository root).
+
+The navigation has three tabs: **Explosions**, **[lab-fire](lab-fire/)** and
+**[lab-water](lab-water/)**.
+
+lab-fire is a separate WebGPU campfire study based on Leon Lin's MIT-licensed
+[procedural-fire](https://github.com/Leonxlnx/procedural-fire), whose README
+credits Claude Code. It includes live combustion, procedural sound, quality
+presets and the lab's view filters. Start with Low quality; a compatible
+WebGPU adapter is required. See the [fire research](docs/research/03-lab-fire.md)
+and [pinned source / attribution](vendor/procedural-fire/UPSTREAM.md).
+The fire study is a reference, not an importable Three.js explosion module.
+
+lab-water is a WebGL2 ocean study based on Humpalumps' MIT-licensed
+[Ultra Water](https://github.com/Humpalumps/Ultra-Water): FFT waves, shore
+breakers, caustics, floating props and an underwater pass, on three r186 with
+its own import map. The page is full-screen; hover the top-right corner for the
+gear, which opens a drawer with the navigation, performance panel and every
+tunable in collapsible folders (keys: 1–4 view filter, Space pause, F
+fullscreen, Esc closes the drawer). See the
+[water research](docs/research/04-lab-water.md) and
+[pinned source / attribution](vendor/ultra-water/UPSTREAM.md). Like the fire,
+it is a reference, not an explosion module.
+
 ## Run the lab
 
 ```sh
@@ -80,6 +105,8 @@ All motion is computed in the vertex shader from time since spawn. All random nu
 
 ```sh
 node --import ./tests/register.mjs --test tests/contract.test.mjs
+PLAYWRIGHT_CORE=/path/to/playwright-core node tools/check-fire.mjs http://127.0.0.1:8931/
+PLAYWRIGHT_CORE=/path/to/playwright-core node tools/check-water.mjs http://127.0.0.1:8931/ [shots-dir]
 PLAYWRIGHT_CORE=/path/to/playwright-core node tools/shoot.mjs http://127.0.0.1:8931/ shots --measure
 python3 tools/sheet.py shots
 ```
@@ -92,6 +119,16 @@ The contract tests need no GPU. They check:
 - `alive()` ending under the game's 0.1 s time-step cap
 - `dispose` freeing everything except the templates
 - no globals
+
+`check-fire.mjs` needs a compatible WebGPU device. It checks navigation between
+the labs, fire ignition/audio, controls, mobile width, quality changes, and
+fallback screens when WebGPU or an adapter is unavailable. Set `CHROME_PATH`
+to override its default macOS Chrome executable.
+
+`check-water.mjs` needs WebGL2. It checks navigation into the water lab, the
+full-screen layout, the hover-only gear and its drawer, the settings folders,
+the view-filter keys, pause, presets and reset, phone width, and switching
+labs. With a directory argument it also saves screenshots.
 
 `shoot.mjs` poses every size at fixed times in all three filters, top-down and from the ground. It also runs the leak test and, with `--measure`, the cost measurement at 1× and 4× CPU throttle.
 

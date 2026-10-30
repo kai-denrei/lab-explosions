@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>lab-water · Explosion research</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🌊%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Procedural water research: FFT ocean, shore breakers, caustics and underwater rendering on WebGL2, based on Humpalumps' MIT-licensed Ultra Water.">
+<link rel="stylesheet" href="../lab/navigation.css">
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../vendor/three-r186/build/three.module.js",
+  "three/addons/": "../vendor/three-r186/addons/",
+  "lil-gui": "../vendor/lil-gui/lil-gui.esm.js"
+} }
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="flir" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0.020 0.114 0.290 0.541 0.761 0.910 0.973 0.988 0.992 1.000 1.000"/>
+      <feFuncG type="table" tableValues="0.008 0.039 0.043 0.059 0.114 0.251 0.439 0.639 0.827 0.953 1.000"/>
+      <feFuncB type="table" tableValues="0.102 0.369 0.541 0.604 0.494 0.290 0.118 0.063 0.227 0.604 1.000"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<main id="stage" aria-label="Procedural ocean viewer">
+  <!-- the WebGL canvas is appended here by main.js -->
+  <div id="overlay" hidden aria-live="off"></div>
+  <div id="loading" role="status"><span>Baking the sea…</span></div>
+  <div id="failure" role="alert" hidden>
+    <h1>This device cannot run the water.</h1>
+    <p id="failure-message"></p>
+    <p>It needs WebGL2 with float render targets. Try a current Chrome, Edge, Firefox or Safari with hardware acceleration enabled. The other labs are still available.</p>
+    <nav class="lab-nav" aria-label="Research labs">
+      <a href="../">Explosions</a>
+      <a href="../lab-fire/">lab-fire</a>
+    </nav>
+  </div>
+</main>
+
+<!-- hover the top-right corner to reveal the gear; it opens every setting -->
+<div id="gear-zone">
+  <button id="gear" type="button" aria-controls="drawer" aria-expanded="false" aria-label="Settings" title="Settings (hover the corner · Esc closes)">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.2"/>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</div>
+
+<aside id="drawer" aria-label="Settings" inert>
+  <nav class="lab-nav" aria-label="Research labs">
+    <strong>Explosion research</strong>
+    <a href="../">Explosions</a>
+    <a href="../lab-fire/">lab-fire</a>
+    <a href="./" aria-current="page">lab-water</a>
+  </nav>
+
+  <div class="drawer-body">
+    <p class="eyebrow">Real-time ocean</p>
+    <h1>lab-water</h1>
+    <p class="intro">FFT waves, shore breakers, caustics and underwater light, every frame computed live. Drag to orbit, wheel to zoom, dive under the surface.</p>
+
+    <section id="perf" aria-label="Performance">
+      <div id="pGpu"></div>
+      <div id="pSpec"></div>
+      <div class="pRow"><b id="pFps">–</b><i>FPS</i><span><em id="pMode">VSYNC</em><br><span id="pMs"></span></span></div>
+      <canvas id="pGraph" width="456" height="48" aria-hidden="true"></canvas>
+      <div class="row">
+        <button id="pUncap" type="button" title="Render frames back-to-back instead of once per display refresh. The screen still updates at its own rate.">Uncap FPS</button>
+        <button id="pBench" type="button" title="Render 300 frames back-to-back with the scene paused and time them on the GPU. The screen freezes for about a second.">Run benchmark</button>
+      </div>
+      <pre id="hud" aria-live="off"></pre>
+    </section>
+
+    <div id="settings"></div>
+
+    <p class="keys">Drag to orbit · wheel to zoom · dive below 0 m<br>F fullscreen · Space pause · 1–4 view filter · Esc closes this panel</p>
+
+    <h2>Research notebook</h2>
+    <details open>
+      <summary>What this reference gives us</summary>
+      <p>A four-cascade Tessendorf FFT sea with JONSWAP wind and swell, eikonal shore breakers, Jacobian foam, area-ratio caustics, planar reflection, Snell's-window underside and a volumetric underwater pass.</p>
+      <p>Floating props use GPU water queries for buoyancy, and leave ripple rings and splash crowns where they land.</p>
+    </details>
+    <details>
+      <summary>What to compare</summary>
+      <p>Watch glints, crest subsurface scatter and foam erosion under the four view filters. Night and thermal show which silhouettes survive without colour, as with the fire and the explosions.</p>
+      <p>The thermal views remap visible brightness; they do not display simulated temperature.</p>
+    </details>
+    <details>
+      <summary>Fit for Stalheart</summary>
+      <p>A WebGL2 reference on three r186, not an importable r160 explosion module. Candidate transfers: splash crowns and Cauchy–Poisson impact rings for shell hits on water, spray billboards, and the foam flow map.</p>
+      <p>Phone GPU cost and integration into the game remain unmeasured here; upstream's phone numbers are in its README.</p>
+    </details>
+    <p><a href="../docs/research/04-lab-water.md">Full research notes ↗</a></p>
+
+    <footer>
+      Based on <a href="https://github.com/Humpalumps/Ultra-Water">Ultra Water</a> by Humpalumps.<br>
+      Upstream reports it was designed with a second agent; this lab is also agent-built.<br>
+      <a href="../vendor/ultra-water/LICENSE">MIT license</a> · <a href="../vendor/ultra-water/THIRD_PARTY_NOTICES.md">Third-party notices</a> · <a href="../vendor/ultra-water/UPSTREAM.md">Source &amp; local changes</a><br>
+      three.js r186 (<a href="../vendor/three-r186/LICENSE">MIT</a>) · lil-gui 0.21 (<a href="../vendor/lil-gui/LICENSE.md">MIT</a>)
+    </footer>
+  </div>
+</aside>
+
+<script type="module" src="./main.js"></script>
+</body>
+</html>

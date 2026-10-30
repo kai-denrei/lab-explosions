@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lab-fire · Explosion research</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🔥%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Procedural fire research: WebGPU combustion, volumetric light and synthesized sound, based on Leon Lin's MIT-licensed procedural-fire.">
+<link rel="stylesheet" href="../lab/navigation.css">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<nav class="lab-nav" aria-label="Research labs">
+  <strong>Explosion research</strong>
+  <a href="../">Explosions</a>
+  <a href="./" aria-current="page">lab-fire</a>
+  <a href="../lab-water/">lab-water</a>
+</nav>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="flir" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0.020 0.114 0.290 0.541 0.761 0.910 0.973 0.988 0.992 1.000 1.000"/>
+      <feFuncG type="table" tableValues="0.008 0.039 0.043 0.059 0.114 0.251 0.439 0.639 0.827 0.953 1.000"/>
+      <feFuncB type="table" tableValues="0.102 0.369 0.541 0.604 0.494 0.290 0.118 0.063 0.227 0.604 1.000"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+<main id="app">
+  <section id="stage" aria-label="Procedural campfire viewer">
+    <canvas id="c" aria-label="Drag to orbit the fire; scroll to zoom"></canvas>
+    <div id="start">
+      <div class="card">
+        <p class="eyebrow">lab-fire / study 01</p>
+        <h1>A fire, from first principles.</h1>
+        <p>Combustion, light and crackle.<br>Every frame and every sound computed live.</p>
+        <button id="ignite" disabled>Preparing the fire…</button>
+        <p id="startup-status" role="status">Checking WebGPU and compiling shaders.</p>
+      </div>
+    </div>
+    <div id="failure" role="alert" hidden>
+      <h1>This device cannot run the fire.</h1>
+      <p id="failure-message"></p>
+      <p>Try a current Chrome or Edge with hardware acceleration enabled, over HTTPS or localhost. The research notes and explosion lab are still available.</p>
+      <a href="../">Back to explosions</a> · <a href="./?q=low">Retry at low quality</a>
+    </div>
+    <div id="hud" aria-live="off"></div>
+  </section>
+  <aside id="panel">
+    <p class="eyebrow">Continuous combustion</p>
+    <h1>lab-fire</h1>
+    <p class="intro">A physical campfire baseline for studying flame shape, smoke, embers and light.</p>
+    <fieldset id="controls" disabled>
+      <legend>Fire controls</legend>
+      <div class="row">
+        <button data-act="stoke" title="S">Stoke</button>
+        <button data-act="pop" title="P">Pop</button>
+        <button data-act="gust" title="G">Gust</button>
+      </div>
+      <label for="size">Fire size</label>
+      <input id="size" type="range" min="0.3" max="1.4" step="0.01" value="1">
+      <h2>View filter</h2>
+      <div class="row" aria-label="View filter">
+        <button data-filter="normal" aria-pressed="true">Normal</button>
+        <button data-filter="night" aria-pressed="false">Night</button>
+        <button data-filter="thermal" aria-pressed="false">FLIR</button>
+        <button data-filter="thermal-game" aria-pressed="false">Game thermal</button>
+      </div>
+      <div class="row"><button id="pause" aria-pressed="false">Pause simulation</button></div>
+      <h2>Sound</h2>
+      <label for="vol">Volume</label>
+      <input id="vol" type="range" min="0" max="1" step="0.01" value="0.6">
+      <div class="row"><button id="mute" disabled>Sound starts with ignition</button></div>
+    </fieldset>
+    <h2>Quality <span class="dim">· restarts the fire</span></h2>
+    <div class="row quality">
+      <a href="?q=low" data-q="low">Low</a><a href="?q=med" data-q="med">Med</a><a href="?q=high" data-q="high">High</a>
+    </div>
+    <p class="keys">Drag to orbit · wheel to zoom<br>S stoke · P pop · G gust · Space pause<br>F fullscreen · double-click to reset camera</p>
+    <h2>Research notebook</h2>
+    <details open>
+      <summary>What this baseline gives us</summary>
+      <p>Fuel, heat and soot evolve in a 3D fluid simulation. A volumetric renderer turns temperature into firelight, with procedural logs, smoke and sparks.</p>
+      <p>Listen for synthesized crackles and pops coupled to the fire. No image textures or recorded audio are loaded.</p>
+    </details>
+    <details>
+      <summary>What to compare</summary>
+      <p>Watch the bright roots, separated flame tongues, smoky tips and ember trails. Switch to night and thermal to judge which silhouettes survive without their original colour.</p>
+      <p>The thermal views remap visible brightness; they do not display simulated temperature directly.</p>
+    </details>
+    <details>
+      <summary>Fit for Stalheart</summary>
+      <p>This is a WebGPU research reference. It uses generated volume textures and a stateful solver; it does not implement the Three.js explosion-module contract.</p>
+      <p>Candidate transfers: flame brightness, soot timing, ember motion and sound coupling. Phone GPU cost and integration into the game remain unmeasured.</p>
+    </details>
+    <p><a href="../docs/research/03-lab-fire.md">Full research notes ↗</a></p>
+    <footer>
+      Based on <a href="https://github.com/Leonxlnx/procedural-fire">procedural-fire</a> by Leon Lin.<br>
+      Upstream reports it was built with Claude Code.<br>
+      <a href="../vendor/procedural-fire/LICENSE">MIT license</a> · <a href="../vendor/procedural-fire/UPSTREAM.md">Source &amp; local changes</a>
+    </footer>
+  </aside>
+</main>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

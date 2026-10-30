@@ -1,0 +1,7 @@
+.lab-nav { display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 6px 12px; background: #15181b; border-bottom: 1px solid #262b30; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; }
+.lab-nav strong { color: #7d8791; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-right: auto; }
+.lab-nav a { color: #d7dbe0; text-decoration: none; padding: 7px 12px; border: 1px solid transparent; border-radius: 4px; white-space: nowrap; }
+.lab-nav a:hover { background: #1f2327; }
+.lab-nav a[aria-current=page] { color: #e8a33c; border-color: #e8a33c; background: #241e15; }
+.lab-nav a:focus-visible { outline: 2px solid #e8a33c; outline-offset: 2px; }
+@media (max-width: 420px) { .lab-nav { padding-inline: 8px; gap: 2px; } .lab-nav strong { font-size: 9px; } .lab-nav a { padding-inline: 8px; } }
