@@ -26,8 +26,16 @@ lab-water is a WebGL2 ocean study based on Humpalumps' MIT-licensed
 breakers, caustics, floating props and an underwater pass, on three r186 with
 its own import map. The page is full-screen; hover the top-right corner for the
 gear, which opens a drawer with the navigation, performance panel and every
-tunable in collapsible folders (keys: 1–4 view filter, Space pause, F
-fullscreen, Esc closes the drawer). See the
+tunable in collapsible folders. Jelaludo's 09-TAI sphere (`assets/tai09/`)
+flies and dives in third person with move-look controls: camera-relative WASD strafe, pointer-locked mouselook (click to capture), an orbit boom behind the look, facing that tracks the look; W thrusts along the look, S back-pedals, Space up, C or Shift+Space down, Shift boost, R re-place, V
+free camera, Shift+Space onto the seabed for seafloor mode; a Stalheart-style radar bottom-right shows the sea life; keys 1–4 view filter, P pause, F fullscreen, Esc closes the
+drawer. The propulsion model is `lab-water/propulsion.js`, tested in Node.
+Around the lee shore live Jelaludo's lab-creatures (`vendor/lab-creatures/`,
+GPL-3.0, transpiled by `tools/build-creatures.mjs`, soft-body solver and all):
+a Cutis-Maku colony with a walking Nih-Dairia on the seabed, a Filament on the
+deep slope, a rolling Cutis-gorogoro pack on the awash sand, slugs and a flat
+snake on the dry beach; and "measure elements" in the
+Lab folder reports the frame cost of the water, the robot and the sea life. See the
 [water research](docs/research/04-lab-water.md) and
 [pinned source / attribution](vendor/ultra-water/UPSTREAM.md). Like the fire,
 it is a reference, not an explosion module.
@@ -105,6 +113,7 @@ All motion is computed in the vertex shader from time since spawn. All random nu
 
 ```sh
 node --import ./tests/register.mjs --test tests/contract.test.mjs
+node --test tests/propulsion.test.mjs tests/radar.test.mjs
 PLAYWRIGHT_CORE=/path/to/playwright-core node tools/check-fire.mjs http://127.0.0.1:8931/
 PLAYWRIGHT_CORE=/path/to/playwright-core node tools/check-water.mjs http://127.0.0.1:8931/ [shots-dir]
 PLAYWRIGHT_CORE=/path/to/playwright-core node tools/shoot.mjs http://127.0.0.1:8931/ shots --measure

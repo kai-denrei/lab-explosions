@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>lab-water · Explosion research</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🌊%3C/text%3E%3C/svg%3E">
-<meta name="description" content="Procedural water research: FFT ocean, shore breakers, caustics and underwater rendering on WebGL2, based on Humpalumps' MIT-licensed Ultra Water.">
+<meta name="description" content="Procedural water research: FFT ocean, shore breakers, caustics and underwater rendering on WebGL2, based on Humpalumps' MIT-licensed Ultra Water, with a flying and diving 09-TAI sphere.">
 <link rel="stylesheet" href="../lab/navigation.css">
 <link rel="stylesheet" href="./style.css">
 <script type="importmap">
@@ -43,6 +43,8 @@
   </div>
 </main>
 
+<canvas id="radar" width="180" height="180" aria-label="Radar: heading-up scope of the sea life around the sphere"></canvas>
+
 <!-- hover the top-right corner to reveal the gear; it opens every setting -->
 <div id="gear-zone">
   <button id="gear" type="button" aria-controls="drawer" aria-expanded="false" aria-label="Settings" title="Settings (hover the corner · Esc closes)">
@@ -64,7 +66,7 @@
   <div class="drawer-body">
     <p class="eyebrow">Real-time ocean</p>
     <h1>lab-water</h1>
-    <p class="intro">FFT waves, shore breakers, caustics and underwater light, every frame computed live. Drag to orbit, wheel to zoom, dive under the surface.</p>
+    <p class="intro">FFT waves, shore breakers, caustics and underwater light, every frame computed live. Fly and dive the 09-TAI sphere in third person, or switch to the free camera.</p>
 
     <section id="perf" aria-label="Performance">
       <div id="pGpu"></div>
@@ -80,13 +82,13 @@
 
     <div id="settings"></div>
 
-    <p class="keys">Drag to orbit · wheel to zoom · dive below 0 m<br>F fullscreen · Space pause · 1–4 view filter · Esc closes this panel</p>
+    <p class="keys"><b>Robot · mouselook scheme</b> · click the water to capture the mouse, Esc releases<br>Mouse looks · W/S thrust along the look, back-pedal · A/D strafe · Space up · C or Shift+Space down · Shift boost<br>Shift+Space onto the seabed parks it there (seafloor mode); Space lifts off · R re-place · V free camera<br>Tank scheme (Robot ▸ Controls): W along the body, Shift+A/D yaw, Shift+W/S pitch<br>Radar bottom-right: green blips are Cutis-Maku, amber ring the Nih-Dairia, cyan the colony<br>Wheel to zoom · double-click recentres · F fullscreen · P pause · 1–4 view filter · Esc closes this panel</p>
 
     <h2>Research notebook</h2>
     <details open>
       <summary>What this reference gives us</summary>
       <p>A four-cascade Tessendorf FFT sea with JONSWAP wind and swell, eikonal shore breakers, Jacobian foam, area-ratio caustics, planar reflection, Snell's-window underside and a volumetric underwater pass.</p>
-      <p>Floating props use GPU water queries for buoyancy, and leave ripple rings and splash crowns where they land.</p>
+      <p>Floating props use GPU water queries for buoyancy, and leave ripple rings and splash crowns where they land. On the seabed off the lee shore, a Cutis-Maku colony hunts whatever comes near and a Nih-Dairia circles above it.</p>
     </details>
     <details>
       <summary>What to compare</summary>
@@ -101,7 +103,9 @@
     <p><a href="../docs/research/04-lab-water.md">Full research notes ↗</a></p>
 
     <footer>
-      Based on <a href="https://github.com/Humpalumps/Ultra-Water">Ultra Water</a> by Humpalumps.<br>
+      Water based on <a href="https://github.com/Humpalumps/Ultra-Water">Ultra Water</a> by Humpalumps.<br>
+      Robot: <a href="https://jelaludo.github.io/SentryTowers_A6/tai09/">09-TAI-01</a> by jelaludo (<a href="../assets/tai09/SOURCE.md">source note</a>), propulsion by this lab.<br>
+      Sea life: Cutis-Maku and Nih-Dairia from jelaludo's <a href="https://kai-denrei.github.io/lab-creatures/">lab-creatures</a> (<a href="../vendor/lab-creatures/LICENSE">GPL-3.0</a> · <a href="../vendor/lab-creatures/UPSTREAM.md">source &amp; port notes</a>).<br>
       Upstream reports it was designed with a second agent; this lab is also agent-built.<br>
       <a href="../vendor/ultra-water/LICENSE">MIT license</a> · <a href="../vendor/ultra-water/THIRD_PARTY_NOTICES.md">Third-party notices</a> · <a href="../vendor/ultra-water/UPSTREAM.md">Source &amp; local changes</a><br>
       three.js r186 (<a href="../vendor/three-r186/LICENSE">MIT</a>) · lil-gui 0.21 (<a href="../vendor/lil-gui/LICENSE.md">MIT</a>)

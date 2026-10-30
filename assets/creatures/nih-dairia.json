@@ -1,0 +1,91 @@
+{
+  "sourceHash": "nih-dairia-spider-v2",
+  "volume": 0.0000560642476203552,
+  "layout": {
+    "positions": {
+      "offset": 0,
+      "length": 28224,
+      "type": "Float32Array"
+    },
+    "normals": {
+      "offset": 112896,
+      "length": 28224,
+      "type": "Float32Array"
+    },
+    "indices": {
+      "offset": 225792,
+      "length": 56436,
+      "type": "Uint32Array"
+    },
+    "particles": {
+      "offset": 451536,
+      "length": 3561,
+      "type": "Float64Array"
+    },
+    "tets": {
+      "offset": 480024,
+      "length": 13248,
+      "type": "Uint32Array"
+    },
+    "volumes": {
+      "offset": 533016,
+      "length": 3312,
+      "type": "Float64Array"
+    },
+    "bindingIds": {
+      "offset": 559512,
+      "length": 37632,
+      "type": "Uint32Array"
+    },
+    "bindingWeights": {
+      "offset": 710040,
+      "length": 37632,
+      "type": "Float64Array"
+    },
+    "tetIds": {
+      "offset": 1011096,
+      "length": 9408,
+      "type": "Uint32Array"
+    },
+    "contacts": {
+      "offset": 1048728,
+      "length": 1725,
+      "type": "Uint32Array"
+    },
+    "opticalPositions": {
+      "offset": 1055632,
+      "length": 28224,
+      "type": "Float32Array"
+    },
+    "opticalNormals": {
+      "offset": 1168528,
+      "length": 28224,
+      "type": "Float32Array"
+    },
+    "opticalIndices": {
+      "offset": 1281424,
+      "length": 56436,
+      "type": "Uint32Array"
+    },
+    "opticalBindingIds": {
+      "offset": 1507168,
+      "length": 37632,
+      "type": "Uint32Array"
+    },
+    "opticalBindingWeights": {
+      "offset": 1657696,
+      "length": 37632,
+      "type": "Float64Array"
+    },
+    "thicknessIds": {
+      "offset": 1958752,
+      "length": 28224,
+      "type": "Uint32Array"
+    },
+    "thicknessWeights": {
+      "offset": 2071648,
+      "length": 28224,
+      "type": "Float32Array"
+    }
+  }
+}

@@ -52,8 +52,8 @@ try {
   await shot('water-drawer');
   // settings tree: top-level folders are there and collapsible
   const folders = await page.evaluate(() => WATER.gui.folders.map(f => f._title));
-  assert.deepEqual(folders, ['Lab', 'Camera', 'Sun & sky', 'Waves', 'Shore waves', 'Water', 'Floaters & underwater', 'Post', 'Quality']);
-  assert.ok(await page.evaluate(() => WATER.gui.folders.slice(1).every(f => f._closed)), 'Folders start collapsed');
+  assert.deepEqual(folders, ['Robot', 'Sea life', 'Lab', 'Free camera (robot mode off)', 'Sun & sky', 'Waves', 'Shore waves', 'Water', 'Floaters & underwater', 'Post', 'Quality']);
+  assert.ok(await page.evaluate(() => WATER.gui.folders.slice(3).every(f => f._closed)), 'Folders start collapsed');
   assert.ok(await page.evaluate(() => WATER.gui.controllersRecursive().length) >= 90, 'Plenty of tweakables');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.getElementById('gear').getAttribute('aria-expanded') === 'false');
@@ -68,13 +68,76 @@ try {
     assert.ok((await page.evaluate(() => document.querySelector('#stage canvas').style.filter)).includes(css), `filter ${name}`);
     if (name !== 'normal') { await page.waitForTimeout(300); await shot(`water-${name}`); }
   }
-  await page.keyboard.press('Space');
+  await page.keyboard.press('KeyP');
   await page.waitForTimeout(100);
   const t = await page.evaluate(() => WATER.ocean.time);
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => WATER.ocean.time), t, 'Pause must stop simulation time');
-  await page.keyboard.press('Space');
+  await page.keyboard.press('KeyP');
   await page.waitForFunction(time => WATER.ocean.time !== time, t);
+
+  // the robot: loaded, third person, WASD / Space / Shift drive it
+  await page.waitForFunction(() => WATER.robot.rig, null, { timeout: 60000 });
+  assert.equal(await page.evaluate(() => WATER.robot.enabled), true, 'Robot mode on by default');
+  assert.equal(await page.evaluate(() => WATER.controls.enabled), false, 'Orbit controls off in robot mode');
+  await page.waitForFunction(() => WATER.prop.speed < 0.5 && WATER.prop.submerged === 1 && WATER.prop.position[1] > WATER.robotWater() - 6, null, { timeout: 20000 });
+  await page.waitForTimeout(500);
+  await shot('water-robot-float');
+  const z0 = await page.evaluate(() => WATER.prop.position[2]), yaw0 = await page.evaluate(() => WATER.prop.yaw);
+  const fwd = await page.evaluate(() => WATER.prop.forward);
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(1500);
+  await page.keyboard.up('KeyW');
+  const moved = await page.evaluate(() => WATER.prop.position);
+  assert.ok((moved[2] - z0) * fwd[2] > 0.5 || Math.abs(moved[0]) > 0.5, 'W moves the robot forward');
+  assert.ok(await page.evaluate(() => WATER.prop.submerged === 1), 'and it stays under while swimming');
+  // mouselook: the body follows the look; S back-pedals without turning
+  await page.evaluate(() => { WATER.chase.look.yaw += 0.8; });
+  await page.waitForTimeout(600);
+  assert.ok(await page.evaluate(yaw => WATER.prop.yaw > yaw + 0.5, yaw0), 'the body turns to follow the look');
+  const yawS = await page.evaluate(() => WATER.prop.yaw);
+  await page.keyboard.down('KeyS'); await page.waitForTimeout(700); await page.keyboard.up('KeyS');
+  assert.ok(await page.evaluate(y => Math.abs(WATER.prop.yaw - y) < 0.05, yawS), 'S backs up without changing the look');
+  assert.equal(await page.evaluate(() => WATER.chase.params.scheme), 'mouselook');
+  await page.keyboard.down('Space');
+  await page.waitForFunction(() => WATER.prop.position[1] > WATER.robotWater() + 4, null, { timeout: 15000 });
+  await page.keyboard.up('Space');
+  assert.ok(await page.evaluate(() => WATER.prop.submerged === 0), 'Space lifts the robot clear of the water');
+  await shot('water-robot-flying');
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('Space');
+  await page.waitForFunction(() => WATER.prop.position[1] < WATER.robotWater() - 3, null, { timeout: 15000 });
+  await page.keyboard.up('Space'); await page.keyboard.up('ShiftLeft');
+  await page.waitForTimeout(400);
+  await shot('water-robot-dive');
+  // a lift puff under water vents bubbles
+  const head = await page.evaluate(() => WATER.jets.head);
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(250);
+  await page.keyboard.up('Space');
+  assert.ok(await page.evaluate(h => WATER.jets.head !== h, head), 'A puff emits exhaust particles');
+  await page.waitForTimeout(350);
+  await shot('water-robot-bubbles');
+  assert.ok(await page.evaluate(() => WATER.floaters.impacts.length > 0), 'Water entry left impact rings');
+  // sea life: loaded, placed on the seabed, and the element benchmark reports every cost
+  await page.waitForFunction(() => WATER.sealife.ready, null, { timeout: 60000 });
+  const stats = await page.evaluate(() => WATER.sealife.stats());
+  assert.equal(stats.cutis, 6); assert.equal(stats.softBodies, 5, 'two walkers and three crawlers'); assert.equal(stats.gorogoro, 4);
+  assert.ok(stats.walkers.some((w) => w.startsWith('nih-dairia:')), 'the Nih-Dairia walks under the lab behaviour');
+  console.log('sea life:', JSON.stringify(stats));
+  await page.evaluate(() => { const p = WATER.sealife.siteWorld('colony'); WATER.prop.reset([p.x, p.y + 1.6, p.z + 3], Math.PI); WATER.chase.setLook(Math.PI, -0.3); WATER.chase.params.distance = 6; WATER.chase.snap(); });
+  await page.waitForTimeout(2500);
+  await shot('water-sealife');
+  const measured = await page.evaluate(() => WATER.measure(120, 3));
+  for (const k of ['water', 'robot', 'sealife', 'base']) assert.ok(Number.isFinite(measured.cost[k]), `cost ${k}`);
+  console.log(`elements @ ${measured.size.join('×')} (${measured.view}): ` + Object.entries(measured.ms).map(([k, v]) => `${k} ${v.toFixed(2)} ms`).join(' · '));
+  console.log(`cost: water ${measured.cost.water.toFixed(2)} · robot ${measured.cost.robot.toFixed(2)} · sea life ${measured.cost.sealife.toFixed(2)} · base ${measured.cost.base.toFixed(2)} ms/frame`);
+  assert.equal(await page.evaluate(() => WATER.expoTrips()), 0, 'Exposure watchdog never tripped');
+  assert.ok(await page.evaluate(() => WATER.chase.params.lookMode === 'pointer-lock' || WATER.chase.params.lockRefused), 'Pointer-locked mouselook by default, drag where lock is refused');
+  await page.keyboard.press('KeyV');
+  assert.equal(await page.evaluate(() => WATER.robot.enabled), false, 'V switches to the free camera');
+  assert.equal(await page.evaluate(() => WATER.controls.enabled), true);
+  await page.keyboard.press('KeyV');
+  assert.equal(await page.evaluate(() => WATER.robot.enabled), true);
 
   // a few tweakables drive their uniforms; presets and reset round-trip
   await page.evaluate(() => { WATER.views['Underwater'](); });

@@ -10,6 +10,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 #loading.gone { opacity: 0; }
 #overlay { position: absolute; left: 12px; bottom: 12px; padding: 4px 7px; background: #0008; color: #a9d8f0; font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre; pointer-events: none; }
 
+/* radar: bottom-right, Stalheart's scope */
+#radar { position: fixed; right: 14px; bottom: 14px; width: 180px; height: 180px; border-radius: 50%; z-index: 10;
+         box-shadow: 0 0 0 1px #5aff8c33, 0 0 24px #0008; pointer-events: none; background: #031007; }
+#radar[hidden] { display: none; }
+@media (max-width: 720px) { #radar { width: 120px; height: 120px; right: 10px; bottom: 10px; } }
+
 /* gear: invisible until the pointer is in the top-right corner, or the drawer is open */
 #gear-zone { position: fixed; top: 0; right: 0; width: 150px; height: 120px; z-index: 30; }
 #gear { position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0;

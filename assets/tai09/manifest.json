@@ -1,0 +1,845 @@
+{
+  "family": "tai09",
+  "label": "09-TAI-01",
+  "name_origin": "球体 (kyuutai): 9 = kyuu, TAI = tai",
+  "revision": 4,
+  "previous_commit": "37bee4d1a2badac03f2a308e65f1fca64b4794d7",
+  "status": "Automatic rolling and flight-leg stow prototype; consuming-game integration pending",
+  "plain_glb_source_of_truth": true,
+  "units": "metres",
+  "axes": "+Y up, +Z forward",
+  "root": "Ground centre of closed sphere",
+  "nominal_diameter_m": 1.6,
+  "supported_damage_levels": [
+    0
+  ],
+  "damage_policy": "D0 only. Damage states have not been authored.",
+  "budgets": {
+    "lod1": {
+      "triangles": 25000
+    },
+    "lod2": {
+      "triangles": 3000,
+      "draw_calls": 1,
+      "bytes": 250000
+    }
+  },
+  "lod_selection": {
+    "lod0": "Close shots, animation review and recordings",
+    "lod1": "All interactive movement; preserve the rigid skeleton and sockets",
+    "lod2": "Closed static map/loading sphere; lookup transforms only. Switch to LOD1 before an ability or rolling is shown.",
+    "automatic_distance_m": null
+  },
+  "mechanics": {
+    "shell": "20 hexagons + 12 pentagonal closure faces; independent EYE_GIMBAL optical pod",
+    "minimum_shell_separation": 0.12,
+    "runtime_rolling_radius_m": 0.8336,
+    "eye": "World-velocity tracking; convert eyeOrientation into body-local EYE_GIMBAL rotation. SOCKET_SENSOR now belongs to EYE_GIMBAL.",
+    "panel_count": 32,
+    "limbs": 6,
+    "adhesive_toes_per_limb": 3,
+    "grapple_jaws": 3,
+    "engine_driven": true,
+    "clips": [],
+    "runtime": "runtime.js",
+    "preview_sequences": [
+      {
+        "name": "Deploy",
+        "duration_s": 0.85
+      },
+      {
+        "name": "Hook_Fire",
+        "duration_s": 0.3
+      },
+      {
+        "name": "Jump",
+        "launch_speed_m_s": 6.4,
+        "gravity_m_s2": 9.81
+      }
+    ],
+    "leg_mount_m": {
+      "stowed_y": -0.22,
+      "deployed_y": -0.4
+    },
+    "stance_height_m": 1.2,
+    "landing": {
+      "righting_window_s": 1.25,
+      "recoil_peak_m": [
+        0.07,
+        0.34
+      ],
+      "recovery_s": 1.65
+    },
+    "tuning": {
+      "default": "torque",
+      "presets": {
+        "control": {
+          "drive": 5,
+          "speed": 28,
+          "winch": 42,
+          "recoil": 0.8
+        },
+        "torque": {
+          "drive": 8.5,
+          "speed": 42,
+          "winch": 78,
+          "recoil": 1
+        },
+        "overdrive": {
+          "drive": 13,
+          "speed": 60,
+          "winch": 120,
+          "recoil": 1.15
+        }
+      },
+      "limits": {
+        "drive": [
+          3,
+          16
+        ],
+        "speed": [
+          24,
+          64
+        ],
+        "winch": [
+          30,
+          130
+        ],
+        "recoil": [
+          0.6,
+          1.25
+        ]
+      }
+    },
+    "winch": {
+      "initial_acceleration_m_s2": 10,
+      "ramp_s": 0.95,
+      "speed_limit_fraction": 0.85,
+      "spring_s2": 105,
+      "damper_s": 13,
+      "nominal_mass_kg": 85,
+      "gravity_m_s2": 9.81,
+      "arrival_assistance_distance_m": 7
+    },
+    "arena_m": [
+      180,
+      24,
+      218
+    ],
+    "collision": "Deterministic tension-only spring-damper reel with full flight gravity, final-approach assistance, ballistic release and planar adhesion. General rigid-body collisions and dynamic rope physics remain pending.",
+    "scale_note": "1.6 m nominal diameter assumed for this first interpretation",
+    "automatic_mobility": {
+      "roll_speed_m_s": 5,
+      "airborne_delay_s": 2,
+      "fold_duration_s": 0.55,
+      "minimum_contact_time_s": 2,
+      "landing_window_s": 1.25
+    }
+  },
+  "references": [
+    {
+      "name": "9TAI-01_GrapplingHook.png",
+      "sha256": "029ad0d68cca91f11dd2fefa3ad79b3fb80ad34e3d2fbd74dae2a2aa77464097",
+      "usage": "User-supplied visual reference only; original procedural geometry; image not redistributed"
+    },
+    {
+      "name": "9TAI-03_GeckoClimbing.png",
+      "sha256": "661e1635932033ef713855b3c96fe0c26e2f51fea7f8a76dec4e31d792b7b728",
+      "usage": "User-supplied visual reference only; original procedural geometry; image not redistributed"
+    },
+    {
+      "name": "9TAI-05_multipod.png",
+      "sha256": "2c829d1e7bca2c45a883bbbcdbbc70418252c5611d227f8ab0e70fe82b446013",
+      "usage": "User-supplied visual reference only; original procedural geometry; image not redistributed"
+    }
+  ],
+  "assets": [
+    {
+      "file": "torque/09_tai_01_d0_lod0.glb",
+      "lod": 0,
+      "damage_level": 0,
+      "static": false,
+      "derived": false,
+      "bytes": 4107500,
+      "triangles": 74448,
+      "draw_calls": 4,
+      "materials": 4,
+      "sha256": "80cc37058f3bfa507eac6a4cb0e22abc94b726dcb57f6675566f5da7310fcc78",
+      "meshopt_file": "derived/meshopt/torque/09_tai_01_d0_lod0.meshopt.glb",
+      "meshopt_bytes": 788868,
+      "meshopt_sha256": "ea3e26b5a1a964a1b76e3d0802118c83d68dc1db539b23cc60ef9f8574817c16",
+      "meshopt_derived": true,
+      "plot_m": [
+        3,
+        3
+      ],
+      "bounds": {
+        "min": [
+          -0.800000011920929,
+          -1.1920929132713809e-8,
+          -0.800000011920929
+        ],
+        "max": [
+          0.800000011920929,
+          1.600000023841858,
+          0.9120000004768372
+        ],
+        "dimensions_m": [
+          1.600000023841858,
+          1.600000035762787,
+          1.7120000123977661
+        ]
+      },
+      "required_nodes": [
+        "TAI09_ROOT",
+        "BODY",
+        "SHELL_ROLL",
+        "PANEL_01",
+        "PANEL_02",
+        "PANEL_03",
+        "PANEL_04",
+        "PANEL_05",
+        "PANEL_06",
+        "PANEL_07",
+        "PANEL_08",
+        "PANEL_09",
+        "PANEL_10",
+        "PANEL_11",
+        "PANEL_12",
+        "PANEL_13",
+        "PANEL_14",
+        "PANEL_15",
+        "PANEL_16",
+        "PANEL_17",
+        "PANEL_18",
+        "PANEL_19",
+        "PANEL_20",
+        "PANEL_21",
+        "PANEL_22",
+        "PANEL_23",
+        "PANEL_24",
+        "PANEL_25",
+        "PANEL_26",
+        "PANEL_27",
+        "PANEL_28",
+        "PANEL_29",
+        "PANEL_30",
+        "PANEL_31",
+        "PANEL_32",
+        "CORE_GIMBAL",
+        "GYRO_ROTOR",
+        "LAUNCHER_AIM",
+        "LAUNCHER_SLIDE",
+        "SOCKET_CABLE",
+        "HOOK_HEAD",
+        "SOCKET_HOOK",
+        "HOOK_JAW_01",
+        "HOOK_JAW_02",
+        "HOOK_JAW_03",
+        "SOCKET_CORE",
+        "EYE_GIMBAL",
+        "SOCKET_SENSOR",
+        "LEG_01_MOUNT",
+        "LEG_01_HIP",
+        "LEG_01_KNEE",
+        "LEG_01_ANKLE",
+        "SOCKET_FOOT_01",
+        "LEG_01_PAD_1",
+        "LEG_01_PAD_2",
+        "LEG_01_PAD_3",
+        "LEG_02_MOUNT",
+        "LEG_02_HIP",
+        "LEG_02_KNEE",
+        "LEG_02_ANKLE",
+        "SOCKET_FOOT_02",
+        "LEG_02_PAD_1",
+        "LEG_02_PAD_2",
+        "LEG_02_PAD_3",
+        "LEG_03_MOUNT",
+        "LEG_03_HIP",
+        "LEG_03_KNEE",
+        "LEG_03_ANKLE",
+        "SOCKET_FOOT_03",
+        "LEG_03_PAD_1",
+        "LEG_03_PAD_2",
+        "LEG_03_PAD_3",
+        "LEG_04_MOUNT",
+        "LEG_04_HIP",
+        "LEG_04_KNEE",
+        "LEG_04_ANKLE",
+        "SOCKET_FOOT_04",
+        "LEG_04_PAD_1",
+        "LEG_04_PAD_2",
+        "LEG_04_PAD_3",
+        "LEG_05_MOUNT",
+        "LEG_05_HIP",
+        "LEG_05_KNEE",
+        "LEG_05_ANKLE",
+        "SOCKET_FOOT_05",
+        "LEG_05_PAD_1",
+        "LEG_05_PAD_2",
+        "LEG_05_PAD_3",
+        "LEG_06_MOUNT",
+        "LEG_06_HIP",
+        "LEG_06_KNEE",
+        "LEG_06_ANKLE",
+        "SOCKET_FOOT_06",
+        "LEG_06_PAD_1",
+        "LEG_06_PAD_2",
+        "LEG_06_PAD_3"
+      ],
+      "sockets": [
+        {
+          "node": "SOCKET_CABLE",
+          "parent": "LAUNCHER_SLIDE",
+          "position_m": [
+            0,
+            0.8,
+            0.63
+          ]
+        },
+        {
+          "node": "SOCKET_HOOK",
+          "parent": "HOOK_HEAD",
+          "position_m": [
+            0,
+            0.8,
+            0.29500000000000004
+          ]
+        },
+        {
+          "node": "SOCKET_CORE",
+          "parent": "CORE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0
+          ]
+        },
+        {
+          "node": "SOCKET_SENSOR",
+          "parent": "EYE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0.912
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_01",
+          "parent": "LEG_01_ANKLE",
+          "position_m": [
+            0.21212702208852902,
+            0.18887938599826776,
+            0.36741477991561783
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_02",
+          "parent": "LEG_02_ANKLE",
+          "position_m": [
+            0.4242540441770581,
+            0.18887938599826776,
+            1.959434878635765e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_03",
+          "parent": "LEG_03_ANKLE",
+          "position_m": [
+            0.21212702208852918,
+            0.18887938599826776,
+            -0.36741477991561766
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_04",
+          "parent": "LEG_04_ANKLE",
+          "position_m": [
+            -0.21212702208852896,
+            0.18887938599826776,
+            -0.36741477991561794
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_05",
+          "parent": "LEG_05_ANKLE",
+          "position_m": [
+            -0.4242540441770581,
+            0.18887938599826776,
+            -7.155048450903302e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_06",
+          "parent": "LEG_06_ANKLE",
+          "position_m": [
+            -0.21212702208852893,
+            0.18887938599826776,
+            0.3674147799156179
+          ]
+        }
+      ],
+      "clips": [],
+      "credit": "Models by jelaludo"
+    },
+    {
+      "file": "torque/09_tai_01_d0_lod1.glb",
+      "lod": 1,
+      "damage_level": 0,
+      "static": false,
+      "derived": false,
+      "bytes": 984648,
+      "triangles": 12596,
+      "draw_calls": 4,
+      "materials": 4,
+      "sha256": "241e3445080dcf24652f05a36d0fca456415d415c3af2b939ea29a5315e24674",
+      "meshopt_file": "derived/meshopt/torque/09_tai_01_d0_lod1.meshopt.glb",
+      "meshopt_bytes": 226548,
+      "meshopt_sha256": "6030cfcd94ca5f30b5b7f70f996d98dd27e451c1c14995777071f3e8f2282df1",
+      "meshopt_derived": true,
+      "plot_m": [
+        3,
+        3
+      ],
+      "bounds": {
+        "min": [
+          -0.800000011920929,
+          -1.1920929132713809e-8,
+          -0.800000011920929
+        ],
+        "max": [
+          0.800000011920929,
+          1.600000023841858,
+          0.9120000004768372
+        ],
+        "dimensions_m": [
+          1.600000023841858,
+          1.600000035762787,
+          1.7120000123977661
+        ]
+      },
+      "required_nodes": [
+        "TAI09_ROOT",
+        "BODY",
+        "SHELL_ROLL",
+        "PANEL_01",
+        "PANEL_02",
+        "PANEL_03",
+        "PANEL_04",
+        "PANEL_05",
+        "PANEL_06",
+        "PANEL_07",
+        "PANEL_08",
+        "PANEL_09",
+        "PANEL_10",
+        "PANEL_11",
+        "PANEL_12",
+        "PANEL_13",
+        "PANEL_14",
+        "PANEL_15",
+        "PANEL_16",
+        "PANEL_17",
+        "PANEL_18",
+        "PANEL_19",
+        "PANEL_20",
+        "PANEL_21",
+        "PANEL_22",
+        "PANEL_23",
+        "PANEL_24",
+        "PANEL_25",
+        "PANEL_26",
+        "PANEL_27",
+        "PANEL_28",
+        "PANEL_29",
+        "PANEL_30",
+        "PANEL_31",
+        "PANEL_32",
+        "CORE_GIMBAL",
+        "GYRO_ROTOR",
+        "LAUNCHER_AIM",
+        "LAUNCHER_SLIDE",
+        "SOCKET_CABLE",
+        "HOOK_HEAD",
+        "SOCKET_HOOK",
+        "HOOK_JAW_01",
+        "HOOK_JAW_02",
+        "HOOK_JAW_03",
+        "SOCKET_CORE",
+        "EYE_GIMBAL",
+        "SOCKET_SENSOR",
+        "LEG_01_MOUNT",
+        "LEG_01_HIP",
+        "LEG_01_KNEE",
+        "LEG_01_ANKLE",
+        "SOCKET_FOOT_01",
+        "LEG_01_PAD_1",
+        "LEG_01_PAD_2",
+        "LEG_01_PAD_3",
+        "LEG_02_MOUNT",
+        "LEG_02_HIP",
+        "LEG_02_KNEE",
+        "LEG_02_ANKLE",
+        "SOCKET_FOOT_02",
+        "LEG_02_PAD_1",
+        "LEG_02_PAD_2",
+        "LEG_02_PAD_3",
+        "LEG_03_MOUNT",
+        "LEG_03_HIP",
+        "LEG_03_KNEE",
+        "LEG_03_ANKLE",
+        "SOCKET_FOOT_03",
+        "LEG_03_PAD_1",
+        "LEG_03_PAD_2",
+        "LEG_03_PAD_3",
+        "LEG_04_MOUNT",
+        "LEG_04_HIP",
+        "LEG_04_KNEE",
+        "LEG_04_ANKLE",
+        "SOCKET_FOOT_04",
+        "LEG_04_PAD_1",
+        "LEG_04_PAD_2",
+        "LEG_04_PAD_3",
+        "LEG_05_MOUNT",
+        "LEG_05_HIP",
+        "LEG_05_KNEE",
+        "LEG_05_ANKLE",
+        "SOCKET_FOOT_05",
+        "LEG_05_PAD_1",
+        "LEG_05_PAD_2",
+        "LEG_05_PAD_3",
+        "LEG_06_MOUNT",
+        "LEG_06_HIP",
+        "LEG_06_KNEE",
+        "LEG_06_ANKLE",
+        "SOCKET_FOOT_06",
+        "LEG_06_PAD_1",
+        "LEG_06_PAD_2",
+        "LEG_06_PAD_3"
+      ],
+      "sockets": [
+        {
+          "node": "SOCKET_CABLE",
+          "parent": "LAUNCHER_SLIDE",
+          "position_m": [
+            0,
+            0.8,
+            0.63
+          ]
+        },
+        {
+          "node": "SOCKET_HOOK",
+          "parent": "HOOK_HEAD",
+          "position_m": [
+            0,
+            0.8,
+            0.29500000000000004
+          ]
+        },
+        {
+          "node": "SOCKET_CORE",
+          "parent": "CORE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0
+          ]
+        },
+        {
+          "node": "SOCKET_SENSOR",
+          "parent": "EYE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0.912
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_01",
+          "parent": "LEG_01_ANKLE",
+          "position_m": [
+            0.21212702208852902,
+            0.18887938599826776,
+            0.36741477991561783
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_02",
+          "parent": "LEG_02_ANKLE",
+          "position_m": [
+            0.4242540441770581,
+            0.18887938599826776,
+            1.959434878635765e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_03",
+          "parent": "LEG_03_ANKLE",
+          "position_m": [
+            0.21212702208852918,
+            0.18887938599826776,
+            -0.36741477991561766
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_04",
+          "parent": "LEG_04_ANKLE",
+          "position_m": [
+            -0.21212702208852896,
+            0.18887938599826776,
+            -0.36741477991561794
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_05",
+          "parent": "LEG_05_ANKLE",
+          "position_m": [
+            -0.4242540441770581,
+            0.18887938599826776,
+            -7.155048450903302e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_06",
+          "parent": "LEG_06_ANKLE",
+          "position_m": [
+            -0.21212702208852893,
+            0.18887938599826776,
+            0.3674147799156179
+          ]
+        }
+      ],
+      "clips": [],
+      "credit": "Models by jelaludo"
+    },
+    {
+      "file": "torque/09_tai_01_d0_lod2.glb",
+      "lod": 2,
+      "damage_level": 0,
+      "static": true,
+      "derived": false,
+      "bytes": 84448,
+      "triangles": 672,
+      "draw_calls": 1,
+      "materials": 1,
+      "sha256": "c9517b1a0409dcd5637f72e56562e5809761345dfd11242ccce342e16b19427e",
+      "meshopt_file": "derived/meshopt/torque/09_tai_01_d0_lod2.meshopt.glb",
+      "meshopt_bytes": 48968,
+      "meshopt_sha256": "e65c3f08fe3f422c10ab2b6350fff6bc92ad1b99adce81c23414138dcd7975a4",
+      "meshopt_derived": true,
+      "plot_m": [
+        3,
+        3
+      ],
+      "bounds": {
+        "min": [
+          -0.800000011920929,
+          -1.1920929132713809e-8,
+          -0.800000011920929
+        ],
+        "max": [
+          0.800000011920929,
+          1.600000023841858,
+          0.9120000004768372
+        ],
+        "dimensions_m": [
+          1.600000023841858,
+          1.600000035762787,
+          1.7120000123977661
+        ]
+      },
+      "required_nodes": [
+        "TAI09_ROOT",
+        "BODY",
+        "SHELL_ROLL",
+        "PANEL_01",
+        "PANEL_02",
+        "PANEL_03",
+        "PANEL_04",
+        "PANEL_05",
+        "PANEL_06",
+        "PANEL_07",
+        "PANEL_08",
+        "PANEL_09",
+        "PANEL_10",
+        "PANEL_11",
+        "PANEL_12",
+        "PANEL_13",
+        "PANEL_14",
+        "PANEL_15",
+        "PANEL_16",
+        "PANEL_17",
+        "PANEL_18",
+        "PANEL_19",
+        "PANEL_20",
+        "PANEL_21",
+        "PANEL_22",
+        "PANEL_23",
+        "PANEL_24",
+        "PANEL_25",
+        "PANEL_26",
+        "PANEL_27",
+        "PANEL_28",
+        "PANEL_29",
+        "PANEL_30",
+        "PANEL_31",
+        "PANEL_32",
+        "CORE_GIMBAL",
+        "GYRO_ROTOR",
+        "LAUNCHER_AIM",
+        "LAUNCHER_SLIDE",
+        "SOCKET_CABLE",
+        "HOOK_HEAD",
+        "SOCKET_HOOK",
+        "HOOK_JAW_01",
+        "HOOK_JAW_02",
+        "HOOK_JAW_03",
+        "SOCKET_CORE",
+        "EYE_GIMBAL",
+        "SOCKET_SENSOR",
+        "LEG_01_MOUNT",
+        "LEG_01_HIP",
+        "LEG_01_KNEE",
+        "LEG_01_ANKLE",
+        "SOCKET_FOOT_01",
+        "LEG_01_PAD_1",
+        "LEG_01_PAD_2",
+        "LEG_01_PAD_3",
+        "LEG_02_MOUNT",
+        "LEG_02_HIP",
+        "LEG_02_KNEE",
+        "LEG_02_ANKLE",
+        "SOCKET_FOOT_02",
+        "LEG_02_PAD_1",
+        "LEG_02_PAD_2",
+        "LEG_02_PAD_3",
+        "LEG_03_MOUNT",
+        "LEG_03_HIP",
+        "LEG_03_KNEE",
+        "LEG_03_ANKLE",
+        "SOCKET_FOOT_03",
+        "LEG_03_PAD_1",
+        "LEG_03_PAD_2",
+        "LEG_03_PAD_3",
+        "LEG_04_MOUNT",
+        "LEG_04_HIP",
+        "LEG_04_KNEE",
+        "LEG_04_ANKLE",
+        "SOCKET_FOOT_04",
+        "LEG_04_PAD_1",
+        "LEG_04_PAD_2",
+        "LEG_04_PAD_3",
+        "LEG_05_MOUNT",
+        "LEG_05_HIP",
+        "LEG_05_KNEE",
+        "LEG_05_ANKLE",
+        "SOCKET_FOOT_05",
+        "LEG_05_PAD_1",
+        "LEG_05_PAD_2",
+        "LEG_05_PAD_3",
+        "LEG_06_MOUNT",
+        "LEG_06_HIP",
+        "LEG_06_KNEE",
+        "LEG_06_ANKLE",
+        "SOCKET_FOOT_06",
+        "LEG_06_PAD_1",
+        "LEG_06_PAD_2",
+        "LEG_06_PAD_3"
+      ],
+      "sockets": [
+        {
+          "node": "SOCKET_CABLE",
+          "parent": "LAUNCHER_SLIDE",
+          "position_m": [
+            0,
+            0.8,
+            0.63
+          ]
+        },
+        {
+          "node": "SOCKET_HOOK",
+          "parent": "HOOK_HEAD",
+          "position_m": [
+            0,
+            0.8,
+            0.29500000000000004
+          ]
+        },
+        {
+          "node": "SOCKET_CORE",
+          "parent": "CORE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0
+          ]
+        },
+        {
+          "node": "SOCKET_SENSOR",
+          "parent": "EYE_GIMBAL",
+          "position_m": [
+            0,
+            0.8,
+            0.912
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_01",
+          "parent": "LEG_01_ANKLE",
+          "position_m": [
+            0.21212702208852902,
+            0.18887938599826776,
+            0.36741477991561783
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_02",
+          "parent": "LEG_02_ANKLE",
+          "position_m": [
+            0.4242540441770581,
+            0.18887938599826776,
+            1.959434878635765e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_03",
+          "parent": "LEG_03_ANKLE",
+          "position_m": [
+            0.21212702208852918,
+            0.18887938599826776,
+            -0.36741477991561766
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_04",
+          "parent": "LEG_04_ANKLE",
+          "position_m": [
+            -0.21212702208852896,
+            0.18887938599826776,
+            -0.36741477991561794
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_05",
+          "parent": "LEG_05_ANKLE",
+          "position_m": [
+            -0.4242540441770581,
+            0.18887938599826776,
+            -7.155048450903302e-17
+          ]
+        },
+        {
+          "node": "SOCKET_FOOT_06",
+          "parent": "LEG_06_ANKLE",
+          "position_m": [
+            -0.21212702208852893,
+            0.18887938599826776,
+            0.3674147799156179
+          ]
+        }
+      ],
+      "clips": [],
+      "credit": "Models by jelaludo"
+    }
+  ]
+}

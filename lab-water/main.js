@@ -24,6 +24,11 @@ import { FLOATER_KINDS } from '../vendor/ultra-water/src/scene/floaterMeshes.js'
 import { FloaterShadow } from '../vendor/ultra-water/src/scene/floaterShadow.js';
 import { WaveCaustics } from '../vendor/ultra-water/src/water/Caustics.js';
 import { createShell, FILTERS } from './shell.js';
+import { Propulsion, inputFromKeys, DEFAULTS as PROP_DEFAULTS } from './propulsion.js';
+import { loadTier, applyPose, ChaseCamera, TIERS } from './robot.js';
+import { Jets } from './jets.js';
+import { SeaLife } from './sealife.js';
+import { createRadarScope } from './radar.js';
 
 const shell = createShell();
 const $ = (id) => document.getElementById(id);
@@ -96,7 +101,72 @@ surface.uniforms.uShadowBias.value = 0.05 / (sunLight.shadow.camera.far - sunLig
 const query = new WaterQuery(renderer, surface, 512);
 const floaters = new Floaters({ scene, heightAt: islandHeight, patchMaterial: terrain.patchProp });
 const underwater = new UnderwaterPass(surface, camera, caustics.uniforms);
-let camWater = 0, wasSubmerged = false, uwComp = 1;
+let camWater = 0, robotWater = 0, wasSubmerged = false, uwComp = 1, lastScrubbed = -1, queryNaNs = 0;
+const queryNaNLog = [];
+
+// --- the robot: a 09-TAI sphere with its own propulsion, in the floaters' scene so the
+// fitted floater shadow map covers it too
+const robot = { carrier: new THREE.Group(), rig: null, body: { pos: new THREE.Vector3(), radius: PROP_DEFAULTS.radius }, enabled: true, tier: 1, loading: false, explode: 0.12 };
+const prop = new Propulsion();
+const keys = new Set();
+floaters.scene.add(robot.carrier);
+const chase = new ChaseCamera(camera, renderer.domElement);
+const jets = new Jets(surface.uniforms);
+scene.add(jets.points);
+
+// --- sea life on the seabed on the lee of the island, where the Underwater shot looks
+const sealife = new SeaLife({ patchMaterial: terrain.patchProp });
+scene.add(sealife.group);
+const elements = { water: true, robot: true, sealife: true };   // the benchmark toggles these
+function placeSeaLife() {
+  // the sites spread around the lee of the island: colony on the seabed, Filament deeper, the
+  // gorogoro pack on the awash sand, the crawlers on the dry beach
+  sealife.place(islandHeight, Math.atan2(sky.sunDir.z, sky.sunDir.x) + Math.PI + 0.3);
+}
+sealife.load().then(() => { placeSeaLife(); if (robot.enabled) placeRobot('colony'); }).catch((e) => { console.error(e); shell.overlay(`Sea life failed to load: ${e.message}`); });
+const radarCanvas = $('radar');
+const radar = createRadarScope(radarCanvas, { centre: () => prop.position, yaw: () => prop.yaw, range: () => ui.radarRange, contacts: () => sealife.contacts() });
+async function loadRobot(lod) {
+  if (robot.loading) return;
+  robot.loading = true;
+  try {
+    const { rig } = await loadTier(robot.carrier, lod, terrain.patchProp);
+    robot.rig = rig; robot.tier = lod;
+  } catch (e) {
+    console.error(e);
+    shell.overlay(`Robot failed to load: ${e.message}`);
+  }
+  robot.loading = false;
+}
+function placeRobot(where = 'ahead') {
+  if (where === 'colony') {
+    // afloat 25 m off the colony, nose toward it: the creatures are on the radar from the first frame
+    const c = sealife.siteWorld('colony'), a = Math.atan2(c.z, c.x);   // the colony's bearing from the island: stand further out
+    const x = c.x + Math.cos(a) * 25, z = c.z + Math.sin(a) * 25;
+    prop.reset([x, Math.max(islandHeight(x, z) + 3, 1.5), z], Math.atan2(c.x - x, c.z - z));
+    chase.setLook(prop.yaw); prop.look.yaw = prop.yaw; prop.look.pitch = 0;
+    chase.snap();
+    return;
+  }
+  // on the water ahead of the camera, nose along the view
+  if (![camera.position.x, camera.position.y, camera.position.z].every(Number.isFinite)) { views[ui.view](); camera.updateMatrixWorld(true); }
+  const f = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+  if (!Number.isFinite(f.x) || f.lengthSq() < 0.5) f.set(0, 0, 1);
+  const at = where === 'here' ? camera.position.clone() : camera.position.clone().addScaledVector(f, 12);
+  const floor = islandHeight(at.x, at.z);
+  prop.reset([at.x, Math.max(floor + 3, Math.max(camWater, 0) + 2.5), at.z], Math.atan2(f.x, f.z));
+  chase.setLook(prop.yaw); prop.look.yaw = prop.yaw; prop.look.pitch = 0;
+  chase.snap();
+}
+function setRobotMode(on) {
+  robot.enabled = on;
+  chase.enabled = on;
+  controls.enabled = !on;
+  robot.carrier.visible = on;
+  if (!on) chase.release();
+  if (on) { placeRobot(); chase.update(prop, 1, null); }
+  else { controls.target.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(30)); }
+}
 const look = { underwater: 0.55 };   // exposure compensation under water (auto exposure lifts it to milk otherwise)
 
 const reflection = new PlanarReflection(REFLECT_LAYER);
@@ -237,9 +307,105 @@ const views = {
 let fSun = null;
 // --- GUI (lives in the drawer; every folder collapsible) ---------------------------
 const gui = new GUI({ container: $('settings'), title: 'Water settings' });
-const ui = { view: args.get('shot') in views ? args.get('shot') : 'Golden hour', benchmark: () => benchButton.click(), exposure: 1, paused: false, fpsOverlay: false, filter: 'normal' };
-gui.add(ui, 'view', Object.keys(views)).name('camera shot').onChange((v) => views[v]());
+const ui = { view: args.get('shot') in views ? args.get('shot') : 'Golden hour', benchmark: () => benchButton.click(), exposure: 1, paused: false, fpsOverlay: false, filter: 'normal', radar: true, radarRange: 60 };
+gui.add(ui, 'view', Object.keys(views)).name('camera shot').onChange((v) => { views[v](); if (robot.enabled) { placeRobot(); chase.update(prop, 1, null); } });
 gui.add(ui, 'benchmark').name('benchmark (uncapped)');
+
+// Robot: propulsion, camera and model
+const fRobot = gui.addFolder('Robot');
+const robotUi = { tier: 1, reset: () => placeRobot(), teleport: () => placeRobot('here'), invertPitch: false };
+fRobot.add(robot, 'enabled').name('robot mode (3rd person)').onChange(setRobotMode).listen();
+fRobot.add(robotUi, 'reset').name('place robot ahead (R)');
+fRobot.add(robotUi, 'tier', TIERS).name('model tier').onChange((v) => loadRobot(v));
+fRobot.add(robot, 'explode', 0.12, 1, 0.01).name('shell separation');
+fRobot.add(ui, 'radar').name('radar');
+fRobot.add(ui, 'radarRange', 15, 300, 5).name('radar range (m)');
+// Controls, in the four-slot nomenclature: input frame + look mode + camera rig + facing policy
+const fCtl = fRobot.addFolder('Controls');
+const SCHEMES = { 'mouselook · camera-relative strafe, facing tracks the look': 'mouselook', 'tank · character-relative, Shift+A/D yaw, Shift+W/S pitch': 'tank' };
+fCtl.add(prop.params, 'scheme', SCHEMES).name('scheme').onChange((v) => { chase.params.scheme = v; if (v === 'tank') chase.release(); else chase.setLook(prop.yaw); prop.look.yaw = prop.yaw; });
+fCtl.add(chase.params, 'lookMode', { 'pointer-locked mouselook (click to capture)': 'pointer-lock', 'click-drag orbit': 'drag', 'locked boom (no look input)': 'locked' }).name('look mode').onChange(() => chase.release());
+fCtl.add(chase.params, 'sensitivity', 0.3, 8, 0.1).name('mouse sensitivity');
+fCtl.add(chase.params, 'invertY').name('invert mouse Y');
+fCtl.add(prop.params, 'boost', 1, 3, 0.05).name('Shift boost ×');
+fCtl.add(prop.params, 'boostRunup', 1, 5, 0.1).name('boost run-up ×');
+fCtl.add(robotUi, 'invertPitch').name('tank: invert pitch (Shift+W/S)');
+fCtl.add(chase.params, 'freeLook').name('tank: free look (drag to orbit)');
+const fThrust = fRobot.addFolder('Propulsion');
+const pp = prop.params;
+fThrust.add(pp, 'thrust', 2, 80, 0.5).name('thrust (m/s²)');
+fThrust.add(pp, 'lift', 2, 80, 0.5).name('lift (m/s²)');
+fThrust.add(pp, 'runupTime', 0.5, 15, 0.5).name('run-up time (s)');
+fThrust.add(pp, 'runupGain', 0, 4, 0.1).name('run-up gain (× thrust)');
+fThrust.add(pp, 'runupDecay', 0.2, 10, 0.1).name('run-up fade (s)');
+fThrust.add(pp, 'response', 1, 30, 0.5).name('command response (1/s)');
+fThrust.add(pp, 'coastDrag', 0.05, 1, 0.05).name('coast drag (× drag)');
+fThrust.add(pp, 'pulseRate', 0.2, 8, 0.1).name('air pulse rate (Hz)');
+fThrust.add(pp, 'pulseDepth', 0, 0.9, 0.05).name('air pulse depth');
+fThrust.add(pp, 'yawRate', 0.3, 6, 0.1).name('yaw rate (rad/s)');
+fThrust.add(pp, 'pitchRate', 0.3, 6, 0.1).name('pitch rate (rad/s)');
+fThrust.add(pp, 'turnResponse', 1, 30, 0.5).name('turn response (1/s)');
+fThrust.add(pp, 'maxPitch', 0.2, 1.5, 0.05).name('max pitch (rad)');
+fThrust.add(pp, 'righting', 0, 8, 0.1).name('gyro righting (1/s)');
+fThrust.add(pp, 'dragAir', 0.005, 0.5, 0.005).name('drag in air (1/m)');
+fThrust.add(pp, 'dragWater', 0.02, 5, 0.01).name('drag in water (1/m)');
+fThrust.add(pp, 'waterDamping', 0, 6, 0.1).name('vertical damping (1/s)');
+fThrust.add(pp, 'buoyancy', 0, 2, 0.05).name('buoyancy (g at full submersion; 1 = neutral)');
+fThrust.add(pp, 'ballastHold', 0, 10, 0.1).name('ballast depth hold (1/s)');
+fThrust.add(pp, 'airGravity', 5, 40, 0.5).name('gravity in the air (m/s²)');
+fThrust.add(pp, 'floorFollow', 1, 20, 0.5).name('seafloor follow (1/s)');
+fThrust.add(pp, 'gravity', 0, 20, 0.1).name('gravity (m/s²)');
+fThrust.add(pp, 'clearance', 0, 2, 0.05).name('ground clearance (m)');
+fThrust.add(pp, 'eyeResponse', 0.5, 20, 0.5).name('eye tracking (1/s)');
+const fJets = fRobot.addFolder('Exhaust');
+const jp = jets.params;
+fJets.add(jp, 'bubblesPerPuff', 0, 120, 1).name('bubbles per puff');
+fJets.add(jp, 'vapourPerPuff', 0, 120, 1).name('vapour per puff');
+fJets.add(jp, 'jetSpeed', 0.5, 10, 0.1).name('jet speed (m/s)');
+fJets.add(jp, 'spread', 0, 1, 0.01);
+fJets.add(jp, 'bubbleLife', 0.3, 5, 0.1).name('bubble life (s)');
+fJets.add(jp, 'bubbleRise', 0, 2, 0.05).name('bubble rise (m/s)');
+fJets.add(jp, 'bubbleSize', 0.02, 0.3, 0.005).name('bubble size (m)');
+fJets.add(jp, 'vapourLife', 0.2, 3, 0.1).name('vapour life (s)');
+fJets.add(jp, 'vapourDrift', 0, 2, 0.05).name('vapour rise (m/s)');
+fJets.add(jp, 'vapourSize', 0.1, 2, 0.05).name('vapour size (m)');
+fJets.add(jp, 'splashBurst', 0, 4, 0.1).name('splash burst ×');
+fJets.add(jp, 'sandBurst', 0, 4, 0.1).name('sand burst ×');
+fJets.add(jp, 'sandSize', 0.02, 0.3, 0.005).name('sand grain (m)');
+fJets.add(jp, 'sandLife', 0.3, 3, 0.1).name('sand life (s)');
+fJets.addColor(jets.uniforms.uSandColor, 'value').name('sand colour');
+fJets.addColor(jets.uniforms.uBubbleColor, 'value').name('bubble colour');
+fJets.addColor(jets.uniforms.uVapourColor, 'value').name('vapour colour');
+const fChase = fRobot.addFolder('Orbit boom');
+fChase.add(chase.params, 'distance', 2.5, 40, 0.5);
+fChase.add(chase.params, 'height', 0, 8, 0.1);
+fChase.add(chase.params, 'minPitch', -1.5, 0, 0.05).name('look down limit (rad)');
+fChase.add(chase.params, 'maxPitch', 0, 1.5, 0.05).name('look up limit (rad)');
+fChase.add(chase.params, 'lag', 0.5, 30, 0.5).name('spring (1/s)');
+fChase.add(chase.params, 'lookAhead', 0, 10, 0.1).name('look ahead (m)');
+fChase.add({ recentre: () => chase.recentre() }, 'recentre').name('recentre view (double-click)');
+fThrust.close(); fJets.close(); fChase.close();
+
+// Sea life
+const fSea = gui.addFolder('Sea life');
+const sp = sealife.params;
+fSea.add(elements, 'sealife').name('sea life visible').listen();
+fSea.add(sp, 'cutisCount', 1, 24, 1).name('Cutis-Maku count').onFinishChange(() => sealife.applyParams());
+fSea.add(sp, 'mixedTiers').name('mixed belt tiers').onChange(() => sealife.applyParams());
+fSea.add(sp, 'gorogoroCount', 1, 12, 1).name('Cutis-gorogoro count').onFinishChange(() => sealife.applyParams());
+fSea.add(sp, 'slugCount', 0, 2, 1).name('slugs').onChange(() => sealife.applyParams());
+fSea.add(sp, 'cutisScale', 1, 6, 0.1).name('membrane scale').onChange(() => sealife.applyParams());
+fSea.add(sp, 'walkerScale', 5, 60, 1).name('walker scale (Nih-Dairia, Filament)').onChange(() => sealife.applyParams());
+fSea.add(sp, 'crawlerScale', 2, 20, 0.5).name('crawler scale (slug, snake)').onChange(() => sealife.applyParams());
+fSea.add(sp, 'huntRadius', 0, 40, 0.5).name('react to the robot within (m)');
+fSea.add(sp, 'simRadius', 20, 600, 10).name('simulate soft bodies within (m)');
+fSea.add(sp, 'lureRange', 0.5, 6, 0.1).name('colony wander range');
+fSea.add(sp, 'lureSpeed', 0, 1, 0.01).name('colony wander speed');
+const goTo = (id) => () => { const p = sealife.siteWorld(id); if (robot.enabled) { prop.reset([p.x + 8, Math.max(p.y + 3, Math.max(camWater, 0) + 1.5), p.z], Math.atan2(-8, 0)); chase.setLook(prop.yaw); prop.look.yaw = prop.yaw; chase.snap(); } else { camera.position.set(p.x + 12, p.y + 6, p.z + 12); controls.target.copy(p); } };
+fSea.add({ go: goTo('colony') }, 'go').name('go to the colony (Cutis + Nih-Dairia)');
+fSea.add({ go: goTo('deep') }, 'go').name('go to the Filament');
+fSea.add({ go: goTo('shallows') }, 'go').name('go to the gorogoro pack');
+fSea.add({ go: goTo('beach') }, 'go').name('go to the beach (slugs, flat snake)');
 
 // Lab: the controls shared with the other labs
 const fLab = gui.addFolder('Lab');
@@ -250,6 +416,9 @@ fLab.add(ui, 'paused').name('pause simulation').listen();
 fLab.add(ui, 'fpsOverlay').name('fps on canvas');
 fLab.add({ fullscreen: () => shell.toggleFullscreen() }, 'fullscreen').name('toggle fullscreen (F)');
 fLab.add({ reset: () => gui.reset() }, 'reset').name('reset every setting');
+fLab.add({ measure: () => measureElements() }, 'measure').name('measure elements (freezes ~5 s)');
+fLab.add(elements, 'water').name('water rendering').listen();
+fLab.add(elements, 'robot').name('robot rendering').listen();
 
 const fCam = gui.addFolder('Camera');
 fCam.add(camera, 'fov', 25, 110, 1).onChange(() => camera.updateProjectionMatrix());
@@ -435,13 +604,26 @@ fQ.add(quality, 'msaa', [2, 4, 8]).onChange(makeTargets);   // water samples the
 fQ.add(quality, 'reflections');
 fQ.add(quality, 'reflectionScale', 0.25, 1, 0.05).onFinishChange(makeTargets);
 fQ.add(quality, 'shadowMap', [1024, 2048, 4096]).name('sun shadow map').onChange(setShadowMap);
-[fCam, fSun, fWave, fShore, fWater, fFloat, fPost, fQ].forEach((f) => f.close());
+[fSea, fCam, fSun, fWave, fShore, fWater, fFloat, fPost, fQ].forEach((f) => f.close());
+fCam.title('Free camera (robot mode off)');
 
+const DRIVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyC', 'ControlLeft', 'ControlRight'];
 document.addEventListener('keydown', (e) => {
-  if (e.code !== 'Space' || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName)) return;
-  ui.paused = !ui.paused;
-  e.preventDefault();
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (DRIVE_KEYS.includes(e.code)) { keys.add(e.code); if (!/^(Shift|Control)/.test(e.code)) e.preventDefault(); return; }
+  if (e.repeat) return;
+  if (e.code === 'KeyP') { ui.paused = !ui.paused; e.preventDefault(); }
+  else if (e.code === 'KeyR' && robot.enabled) { placeRobot(); e.preventDefault(); }
+  else if (e.code === 'KeyV') { setRobotMode(!robot.enabled); e.preventDefault(); }
 });
+document.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
+document.addEventListener('visibilitychange', () => { if (document.hidden) keys.clear(); });
+function driveInput() {
+  const i = inputFromKeys(keys, prop.params.scheme);
+  if (robotUi.invertPitch) [i.pitchDown, i.pitchUp] = [i.pitchUp, i.pitchDown];
+  return i;
+}
 
 // --- frame ---------------------------------------------------------------------
 const gl = renderer.getContext();
@@ -454,11 +636,59 @@ function renderFrame(dt) {
   timer.beginFrame();
 
   // latest water heights (1-3 frames old) drive the camera test and the floaters
-  if (query.resultCount > 0) camWater = query.result[0];
-  floaters.ingest(query, 1);
+  // the GPU query can return a non-finite height for a point now and then (seen in soak
+  // runs at speed near the shore); one NaN here would poison the robot, a floater, the
+  // fitted shadow camera and then the auto-exposure state for good. Scrub it, keep the
+  // last good value, and remember what the robot was doing for the record.
+  if (query.resultCount > 1 && query.resultTime !== lastScrubbed) {
+    lastScrubbed = query.resultTime;
+    const r = query.result, n = query.resultCount * 4;
+    for (let i = 0; i < n; i++) if (!Number.isFinite(r[i])) {
+      queryNaNs++;
+      if (queryNaNLog.length < 12) queryNaNLog.push({ t: +prop.time.toFixed(2), slot: i, point: i >> 2, pos: prop.position.map((v) => +v.toFixed(2)), vel: prop.velocity.map((v) => +v.toFixed(2)), speed: +prop.speed.toFixed(1), sub: prop.submerged, impacts: floaters.impacts.length, bodies: floaters.bodies.length });
+      r[i] = (i & 3) === 0 ? ((i >> 2) === 0 ? camWater : (i >> 2) === 1 ? robotWater : 0) : 0;
+    }
+    camWater = r[0]; robotWater = r[4];
+  }
+  floaters.ingest(query, 2);
   floaters.step(dt);
+  // the robot runs at a fixed 120 Hz under the frame, on the same clock
+  robot.carrier.visible = robot.enabled && elements.robot;
+  if (robot.enabled && elements.robot && dt > 0) {
+    prop.look.yaw = chase.look.yaw; prop.look.pitch = chase.look.pitch;
+    const input = driveInput(), ground = islandHeight(prop.position[0], prop.position[2]);
+    for (let left = dt; left > 1e-6; left -= 1 / 120) prop.step(Math.min(left, 1 / 120), input, { waterHeight: robotWater, groundHeight: ground });
+    for (const e of prop.drainEvents()) {
+      if (e.type === 'puff') { jets.emit([e.x, e.y, e.z], e.dir, prop.params.radius, e.strength, e.submerged, e.t); continue; }
+      if (e.type === 'land') {
+        // a hard arrival on the bottom: wet sand or seabed silt thrown up, bubbles if under water
+        const n = Math.round(jets.params.sandBurst * Math.min(320, 40 + e.speed * 20)), foot = [e.x, e.y - prop.params.radius * 0.9, e.z];
+        if (e.wet < 0.3) jets.burst(foot, 2, n, 1.5 + e.speed * 0.45, e.t);   // dry or just-awash sand
+        else { jets.burst(foot, 2, Math.round(n * 0.6), 0.8 + e.speed * 0.15, e.t); jets.burst(foot, 0, Math.round(n * 0.4), 1 + e.speed * 0.2, e.t); }
+        continue;
+      }
+      // waterline crossings: Cauchy-Poisson rings and a splash crown scaled by the entry speed, and a burst of spray and bubbles
+      const entering = e.type === 'splash';
+      const amp = Math.min(1.4, (entering ? 0.07 : 0.03) * e.speed + 0.05), size = 1.2 + Math.min(1.5, e.speed * 0.06);
+      floaters.impacts.push({ x: e.x, z: e.z, t: floaters.time, amp, size });
+      if (floaters.impacts.length > 8) floaters.impacts.shift();
+      const at = [e.x, robotWater, e.z], k = jets.params.splashBurst * (entering ? 1 : 0.4);
+      jets.burst(at, 3, Math.round(k * Math.min(420, 50 + e.speed * 22)), 2.5 + e.speed * 0.55, e.t);   // droplets thrown up
+      jets.burst(at, 0, Math.round(k * Math.min(120, 15 + e.speed * 6)), 1 + e.speed * 0.2, e.t);       // bubbles below
+    }
+    if (!prop.sane) { console.error('propulsion state went non-finite; re-placing the robot', { water: robotWater, ground }); placeRobot(); }
+    robot.body.pos.fromArray(prop.position);
+    if (robot.rig) applyPose(robot.carrier, robot.rig, prop, robot.explode);
+  }
+  jets.points.visible = robot.enabled && elements.robot;
+  jets.update(prop.time, camera, hdrRT.height);
+  sealife.visible = elements.sealife;
+  if (elements.sealife) {
+    sealife.step(dt, robot.enabled && elements.robot ? robot.body.pos : null, camera.position);
+    sealife.update(camera, hdrRT.height);
+  }
   timer.begin('floatShadow');
-  floatShadow.update(renderer, floaters.scene, floaters.bodies, sky.sunDir);
+  floatShadow.update(renderer, floaters.scene, robot.enabled && elements.robot && robot.rig ? [...floaters.bodies, robot.body] : floaters.bodies, sky.sunDir);
   // water entries -> ripple rings + splash (ages on the floaters' clock)
   for (let i = 0; i < 8; i++) {
     const e = floaters.impacts[i], age = e ? floaters.time - e.t : 1e9;
@@ -466,14 +696,16 @@ function renderFrame(dt) {
     su.uImpactSize.value[i] = e?.size ?? 1;
   }
 
-  ocean.update(dt, timer);
-  timer.begin('caustics');
-  caustics.update(sky.sunDir);
-  surface.update(camera, elapsed % 3600);
-  spray.update();
-  timer.begin('query');
-  const pts = floaters.collectPoints([camera.position]);
-  query.submit(pts, floaters.count, floaters.layout, elapsed);
+  if (elements.water) {
+    ocean.update(dt, timer);
+    timer.begin('caustics');
+    caustics.update(sky.sunDir);
+    surface.update(camera, elapsed % 3600);
+    spray.update();
+    timer.begin('query');
+    const pts = floaters.collectPoints([camera.position, robot.body.pos]);
+    query.submit(pts, floaters.count, floaters.layout, elapsed);
+  }
 
   const camY = camera.position.y;
   const submerged = camY < camWater - 0.3, nearSurface = camY < camWater + 1.2;
@@ -486,7 +718,7 @@ function renderFrame(dt) {
   wasSubmerged = submerged;
 
   timer.begin('reflection');
-  if (quality.reflections && !submerged) {
+  if (quality.reflections && !submerged && elements.water) {
     reflection.render(renderer, scene, camera);
     su.uReflection.value = reflection.target.texture;
   } else su.uReflection.value = emptyReflection;
@@ -497,14 +729,15 @@ function renderFrame(dt) {
   renderer.clear(true, true, false);
   renderer.render(scene, camera);
 
-  timer.begin('water');
-  su.uShadowMap.value = sunLight.shadow.map.depthTexture;
-  hdrRT.resolveDepthBuffer = nearSurface;   // only the underwater pass needs depth with water
-  renderer.render(waterScene, camera);
-  hdrRT.resolveDepthBuffer = true;
-
   let frame = hdrRT.texture;
-  if (nearSurface) {
+  if (elements.water) {
+    timer.begin('water');
+    su.uShadowMap.value = sunLight.shadow.map.depthTexture;
+    hdrRT.resolveDepthBuffer = nearSurface;   // only the underwater pass needs depth with water
+    renderer.render(waterScene, camera);
+    hdrRT.resolveDepthBuffer = true;
+  }
+  if (nearSurface && elements.water) {
     timer.begin('underwater');
     frame = underwater.render(renderer, hdrRT, camY < camWater - 0.8);
   }
@@ -555,9 +788,48 @@ async function runBenchmark(frames = 300) {
   return { ms, gpu, passes };
 }
 window.runBenchmark = runBenchmark;
+
+// Cost of each element from the current view: the benchmark with each one switched
+// off. Configurations are interleaved over several rounds and the best round is kept,
+// so clock ramps and other tabs' work don't land on one configuration.
+async function measureElements(frames = 120, rounds = 3) {
+  if (benchmarking) return null;
+  const saved = { ...elements };
+  const runs = [
+    ['everything', {}],
+    ['no sea life', { sealife: false }],
+    ['no robot', { robot: false }],
+    ['no water', { water: false }],
+    ['sky + island only', { water: false, robot: false, sealife: false }],
+  ];
+  const ms = {}, all = {};
+  for (let r = 0; r < rounds; r++) {
+    for (const [label, off] of runs) {
+      Object.assign(elements, saved, off);
+      const v = (await runBenchmark(frames)).ms;
+      (all[label] ??= []).push(v);
+      ms[label] = Math.min(ms[label] ?? Infinity, v);
+    }
+  }
+  Object.assign(elements, saved);
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const cost = {
+    water: ms['everything'] - ms['no water'],
+    robot: ms['everything'] - ms['no robot'],
+    sealife: ms['everything'] - ms['no sea life'],
+    base: ms['sky + island only'],
+  };
+  const fps = (v) => (1000 / v).toFixed(0);
+  bench = `elements @ ${size.x}×${size.y}, ${robot.enabled ? 'robot chase view' : `view "${ui.view}"`}, best of ${rounds} × ${frames} frames\n`
+    + Object.entries(ms).map(([k, v]) => `  ${k.padEnd(18)} ${v.toFixed(2)} ms  ${fps(v)} fps  (rounds ${all[k].map((x) => x.toFixed(1)).join(' / ')})`).join('\n')
+    + `\n  cost: water ${cost.water.toFixed(2)} ms · robot ${cost.robot.toFixed(2)} ms · sea life ${cost.sealife.toFixed(2)} ms · base ${cost.base.toFixed(2)} ms`;
+  console.log(bench);
+  hud.textContent = bench;
+  return { ms, all, cost, size: [size.x, size.y], view: robot.enabled ? 'robot chase view' : ui.view, frames, rounds, sealife: sealife.stats() };
+}
 window.WATER = {
   camera, controls, sky, post, surface, ocean, terrain, timer, views, quality, renderer, floaters, query, underwater, spray, snow, caustics, floatShadow,
-  gui, ui, shell, elapsed: () => elapsed, camWater: () => camWater, markSun: () => (sunDirty = true),
+  gui, ui, shell, robot, prop, chase, jets, sealife, elements, measure: measureElements, keys, radar, expoTrips: () => expoTrips, queryNaNs: () => queryNaNs, queryNaNLog, elapsed: () => elapsed, camWater: () => camWater, robotWater: () => robotWater, markSun: () => (sunDirty = true),
 };
 
 // --- HUD + loop ------------------------------------------------------------------
@@ -586,7 +858,28 @@ benchButton.onclick = async () => {
   benchButton.textContent = 'Run benchmark';
 };
 
+// A non-finite value in the auto-exposure state (a 1×1 ping-pong target) blacks every
+// frame after it and never recovers on its own. Read it once a second; if it has gone
+// bad, snap the next metering so the state is replaced, and say so.
+const expoPixel = new Float32Array(4), expoHalf = new Uint16Array(4);
+let expoTrips = 0;
+function exposureWatchdog() {
+  try {
+    const rt = post.adapt[post._cur];
+    const half = rt.texture.type === THREE.HalfFloatType;
+    renderer.readRenderTargetPixels(rt, 0, 0, 1, 1, half ? expoHalf : expoPixel);
+    const bad = half ? Array.from(expoHalf).some((h) => (h & 0x7c00) === 0x7c00) : !Array.from(expoPixel).every(Number.isFinite);
+    if (bad) {
+      post._snap = true;
+      expoTrips++;
+      console.error(`auto-exposure state went non-finite (trip ${expoTrips}); re-metering`, half ? Array.from(expoHalf) : Array.from(expoPixel));
+      shell.overlay(`exposure watchdog tripped (${expoTrips}); re-metered`);
+    }
+  } catch (e) { /* readback unsupported on this target type: the watchdog is best-effort */ }
+}
+
 function updateHud(now) {
+  exposureWatchdog();
   const fps = (frames * 1000) / (now - lastHud);
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   $('pSpec').textContent = `${size.x}×${size.y} · ${quality.msaa}× MSAA · ${mobile ? 'mobile' : 'desktop'} profile`;
@@ -610,7 +903,10 @@ function updateHud(now) {
   }
   if (bench) text += `${text ? '\n' : ''}${bench}`;
   hud.textContent = text;
-  shell.overlay(ui.fpsOverlay ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms · ${size.x}×${size.y}${ui.paused ? ' · paused' : ''}` : '');
+  const mode = prop.seafloor ? 'SEAFLOOR' : prop.submerged > 0.5 ? 'SUBMERGED' : prop.submerged > 0 ? 'AWASH' : 'AIR';
+  const hint = robot.enabled && prop.params.scheme === 'mouselook' ? (chase.params.lookMode === 'pointer-lock' ? (chase.locked ? ' · Esc releases the mouse' : ' · click the water to capture the mouse') : chase.params.lookMode === 'drag' ? ' · drag to look' : '') : '';
+  const tele = robot.enabled ? `${mode} · ${prop.speed.toFixed(1)} m/s · depth ${Math.max(0, robotWater - prop.position[1]).toFixed(1)} m · run-up ${(prop.runup * 100).toFixed(0)}%${hint}` : '';
+  shell.overlay(ui.fpsOverlay || robot.enabled ? [ui.fpsOverlay ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms · ${size.x}×${size.y}` : '', tele, ui.paused ? 'paused' : ''].filter(Boolean).join('\n') : '');
   frames = 0;
   lastHud = now;
 }
@@ -646,7 +942,10 @@ let firstFrame = true;
 function tick(now) {
   const dt = ui.paused ? 0 : Math.min((now - last) / 1000, 0.1);
   last = now;
-  controls.update();
+  if (robot.enabled) chase.update(prop, dt, (x, z) => islandHeight(x, z));
+  else controls.update();
+  radarCanvas.hidden = !(robot.enabled && ui.radar && elements.robot);
+  if (!radarCanvas.hidden) radar.draw(now / 1000);
   clampCamera();
   renderFrame(dt);
   frames++;
@@ -693,5 +992,7 @@ resize();
 applySun();
 views[ui.view]();
 controls.update();
+setRobotMode(robot.enabled);
+loadRobot(robot.tier);
 requestAnimationFrame(loop);
 }
