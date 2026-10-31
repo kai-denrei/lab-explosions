@@ -98,6 +98,17 @@ try {
   const yawS = await page.evaluate(() => WATER.prop.yaw);
   await page.keyboard.down('KeyS'); await page.waitForTimeout(700); await page.keyboard.up('KeyS');
   assert.ok(await page.evaluate(y => Math.abs(WATER.prop.yaw - y) < 0.05, yawS), 'S backs up without changing the look');
+  // Shift+A: a smooth keyboard turn of the look, the body following; released, it winds down rather than stopping dead
+  const lookA = await page.evaluate(() => WATER.chase.look.yaw);
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyA'); await page.waitForTimeout(600);
+  const midTurn = await page.evaluate(() => ({ look: WATER.chase.look.yaw, vel: WATER.chase.turnVel, sway: WATER.prop.cmd.sway }));
+  await page.keyboard.up('KeyA'); await page.keyboard.up('ShiftLeft');
+  assert.ok(midTurn.look - lookA > 0.4 && midTurn.vel > 1, `Shift+A turns the look left: ${JSON.stringify(midTurn)} from ${lookA.toFixed(2)}`);
+  await page.waitForTimeout(800);
+  const after = await page.evaluate(() => ({ look: WATER.chase.look.yaw, vel: WATER.chase.turnVel, yaw: WATER.prop.yaw }));
+  assert.ok(after.look > midTurn.look && Math.abs(after.vel) < 0.1 && Math.abs(after.vel) < midTurn.vel * 0.1, `the turn winds down after release: ${JSON.stringify(after)}`);
+  assert.ok(Math.abs(after.yaw - after.look) < 0.25, `the body follows the turned look: ${JSON.stringify(after)}`);
+  assert.ok(Math.abs(midTurn.sway) < 0.05, `Shift+A does not strafe (sway command): ${JSON.stringify(midTurn)}`);
   assert.equal(await page.evaluate(() => WATER.chase.params.scheme), 'mouselook');
   await page.keyboard.down('Space');
   await page.waitForFunction(() => WATER.prop.position[1] > WATER.robotWater() + 4, null, { timeout: 15000 });
@@ -124,6 +135,17 @@ try {
   assert.equal(stats.cutis, 6); assert.equal(stats.softBodies, 5, 'two walkers and three crawlers'); assert.equal(stats.gorogoro, 4);
   assert.ok(stats.walkers.some((w) => w.startsWith('nih-dairia:')), 'the Nih-Dairia walks under the lab behaviour');
   console.log('sea life:', JSON.stringify(stats));
+  // contact: drop the sphere onto the Nih-Dairia's back; it registers, kicks back, flares the halo and startles the creature
+  await page.evaluate(() => { const c = WATER.sealife.creatures.find((c) => c.variant === 'nih-dairia'); const p = c.worldPosition(); WATER.prop.reset([p.x, p.y + 0.5, p.z], 0); WATER.chase.snap(); });
+  await page.waitForFunction(() => WATER.contact.count > 0, null, { timeout: 8000 });
+  const touched = await page.evaluate(() => ({ count: WATER.contact.count, last: WATER.contact.last, pain: WATER.contact.pain, halo: document.getElementById('pain').style.opacity, hidden: document.getElementById('pain').hidden, speed: WATER.prop.speed, sane: WATER.prop.sane, nih: WATER.sealife.creatures.find((c) => c.variant === 'nih-dairia').state() }));
+  assert.ok(touched.count > 0 && touched.last.startsWith('nih-dairia'), `contact registered: ${JSON.stringify(touched)}`);
+  assert.ok(touched.pain > 0 && !touched.hidden && +touched.halo > 0, `the pain halo shows: ${JSON.stringify(touched)}`);
+  assert.ok(touched.sane, 'state finite after the contact');
+  console.log('contact:', JSON.stringify(touched));
+  await shot('water-contact');
+  await page.waitForFunction(() => WATER.contact.pain === 0, null, { timeout: 8000 });
+  assert.ok(await page.evaluate(() => document.getElementById('pain').hidden), 'the halo fades out');
   await page.evaluate(() => { const p = WATER.sealife.siteWorld('colony'); WATER.prop.reset([p.x, p.y + 1.6, p.z + 3], Math.PI); WATER.chase.setLook(Math.PI, -0.3); WATER.chase.params.distance = 6; WATER.chase.snap(); });
   await page.waitForTimeout(2500);
   await shot('water-sealife');

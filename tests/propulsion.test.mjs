@@ -178,9 +178,11 @@ test('tank keys: Shift is the modifier', () => {
   assert.deepEqual(inputFromKeys(new Set(['ArrowDown', 'ArrowRight']), 'tank'), { ...NO_INPUT, back: true, right: true });
 });
 
-test('mouselook keys: WASD strafe, Space up, C or Shift+Space down, Shift boosts', () => {
+test('mouselook keys: WASD strafe, Space up, C or Shift+Space down, Shift boosts, Shift+A/D turns', () => {
   assert.deepEqual(inputFromKeys(new Set(['KeyW', 'Space'])), { ...NO_INPUT, forward: true, up: true });
-  assert.deepEqual(inputFromKeys(new Set(['KeyS', 'KeyA', 'ShiftLeft'])), { ...NO_INPUT, back: true, left: true, boost: true });
+  assert.deepEqual(inputFromKeys(new Set(['KeyS', 'ShiftLeft'])), { ...NO_INPUT, back: true, boost: true });
+  assert.deepEqual(inputFromKeys(new Set(['KeyA', 'ShiftLeft'])), { ...NO_INPUT, yawLeft: true }, 'Shift+A turns left, no strafe, no boost');
+  assert.deepEqual(inputFromKeys(new Set(['KeyW', 'KeyD', 'ShiftRight'])), { ...NO_INPUT, forward: true, yawRight: true }, 'Shift+W+D thrusts and turns right');
   assert.deepEqual(inputFromKeys(new Set(['Space', 'ShiftLeft'])), { ...NO_INPUT, down: true });
   assert.deepEqual(inputFromKeys(new Set(['KeyC', 'KeyD'])), { ...NO_INPUT, down: true, right: true });
 });
@@ -262,4 +264,19 @@ test('seafloor: Shift+Space onto the seabed parks the sphere there, WASD rides t
   assert.ok(p.seafloor, 'still on the bed');
   run(p, 2, { ...NO_INPUT, up: true }, shelf(p.position[0]));
   assert.ok(!p.seafloor && p.velocity[1] > 1, 'Space lifts off');
+});
+
+test('a contact pushes the sphere clear, kills the approach speed and kicks it back', () => {
+  const p = new Propulsion();
+  p.reset([0, -5, 0]);
+  p.velocity = [0, 0, -4];                          // running into something ahead at -Z
+  const kick = p.contact([0, 0, 1], 0.2);           // the obstacle is behind us at -Z: normal toward +Z
+  assert.ok(kick > 0, 'a kick was applied');
+  near(p.position[2], 0.2, 1e-9, 'pushed clear by the overlap');
+  assert.ok(p.velocity[2] > 0, `moving away now: ${p.velocity[2]}`);
+  assert.ok(p.velocity[2] <= DEFAULTS.contactRecoilMax, 'kick is capped');
+  const e = p.drainEvents().find((e) => e.type === 'contact');
+  assert.ok(e, 'a contact event is raised'); near(e.into, -4, 1e-9, 'records the approach speed');
+  assert.equal(p.contact([0, 0, 0], 0.2), 0, 'a zero normal is ignored');
+  assert.ok(p.sane, 'state stays finite');
 });

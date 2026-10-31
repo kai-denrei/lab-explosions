@@ -62,7 +62,10 @@ export class ChaseCamera {
       scheme: 'mouselook',        // 'mouselook' | 'tank' (set by main from the propulsion)
       azimuth: 0, elevation: 0.28,   // tank scheme: the fixed orbit offset behind the heading
       freeLook: false,            // tank scheme: drag to orbit
+      keyYawRate: 2.2,            // rad/s of a Shift+A/D keyboard turn at full speed
+      keyYawResponse: 6,          // 1/s: how quickly the turn winds up and down
     };
+    this.turnVel = 0;             // the keyboard turn's current rate, eased
     this.enabled = false;
     this.look = { yaw: 0, pitch: -0.12 };   // the pilot's look; pitch positive = up
     this.locked = false;
@@ -112,6 +115,14 @@ export class ChaseCamera {
 
   // align the look with a heading (after a re-place) so the boom starts behind the nose
   setLook(yaw, pitch = -0.12) { this.look.yaw = yaw; this.look.pitch = pitch; }
+  // dir: +1 turns left, -1 right, 0 lets the turn wind down. Smooth in both directions so a
+  // tap nudges and a hold sweeps, and releasing never stops dead.
+  keyTurn(dir, dt) {
+    const P = this.params;
+    this.turnVel += (dir * P.keyYawRate - this.turnVel) * (1 - Math.exp(-P.keyYawResponse * dt));
+    if (Math.abs(this.turnVel) < 1e-4 && dir === 0) this.turnVel = 0;
+    this.look.yaw += this.turnVel * dt;
+  }
 
   update(state, dt, floorAt) {
     const P = this.params, c = this.camera, mouselook = P.scheme === 'mouselook';

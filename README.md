@@ -27,9 +27,11 @@ breakers, caustics, floating props and an underwater pass, on three r186 with
 its own import map. The page is full-screen; hover the top-right corner for the
 gear, which opens a drawer with the navigation, performance panel and every
 tunable in collapsible folders. Jelaludo's 09-TAI sphere (`assets/tai09/`)
-flies and dives in third person with move-look controls: camera-relative WASD strafe, pointer-locked mouselook (click to capture), an orbit boom behind the look, facing that tracks the look; W thrusts along the look, S back-pedals, Space up, C or Shift+Space down, Shift boost, R re-place, V
+flies and dives in third person with move-look controls: camera-relative WASD strafe, pointer-locked mouselook (click to capture), an orbit boom behind the look, facing that tracks the look; W thrusts along the look, S back-pedals, Space up, C or Shift+Space down, Shift+A/D a smooth turn, Shift boost, R re-place, V
 free camera, Shift+Space onto the seabed for seafloor mode; a Stalheart-style radar bottom-right shows the sea life; keys 1–4 view filter, P pause, F fullscreen, Esc closes the
 drawer. The propulsion model is `lab-water/propulsion.js`, tested in Node.
+Touching a creature registers as a contact (no damage): a recoil, a red pain halo and
+bubbles; the sea life smells the sphere within 60 m and comes to it.
 Around the lee shore live Jelaludo's lab-creatures (`vendor/lab-creatures/`,
 GPL-3.0, transpiled by `tools/build-creatures.mjs`, soft-body solver and all):
 a Cutis-Maku colony with a walking Nih-Dairia on the seabed, a Filament on the

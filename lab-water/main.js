@@ -109,6 +109,9 @@ const queryNaNLog = [];
 const robot = { carrier: new THREE.Group(), rig: null, body: { pos: new THREE.Vector3(), radius: PROP_DEFAULTS.radius }, enabled: true, tier: 1, loading: false, explode: 0.12 };
 const prop = new Propulsion();
 const keys = new Set();
+// contact with the sea life: no damage, a jolt, a red halo and a record of what was touched
+const contact = { pain: 0, count: 0, last: '', lastT: -1e9, cool: new Map(), params: { recoil: PROP_DEFAULTS.contactRecoil, cooldown: 0.45, painDecay: 2.2, halo: 1, bubbles: 1 } };
+const painEl = document.getElementById('pain');
 floaters.scene.add(robot.carrier);
 const chase = new ChaseCamera(camera, renderer.domElement);
 const jets = new Jets(surface.uniforms);
@@ -322,11 +325,13 @@ fRobot.add(ui, 'radar').name('radar');
 fRobot.add(ui, 'radarRange', 15, 300, 5).name('radar range (m)');
 // Controls, in the four-slot nomenclature: input frame + look mode + camera rig + facing policy
 const fCtl = fRobot.addFolder('Controls');
-const SCHEMES = { 'mouselook · camera-relative strafe, facing tracks the look': 'mouselook', 'tank · character-relative, Shift+A/D yaw, Shift+W/S pitch': 'tank' };
+const SCHEMES = { 'mouselook · camera-relative strafe, Shift+A/D turn, facing tracks the look': 'mouselook', 'tank · character-relative, Shift+A/D yaw, Shift+W/S pitch': 'tank' };
 fCtl.add(prop.params, 'scheme', SCHEMES).name('scheme').onChange((v) => { chase.params.scheme = v; if (v === 'tank') chase.release(); else chase.setLook(prop.yaw); prop.look.yaw = prop.yaw; });
 fCtl.add(chase.params, 'lookMode', { 'pointer-locked mouselook (click to capture)': 'pointer-lock', 'click-drag orbit': 'drag', 'locked boom (no look input)': 'locked' }).name('look mode').onChange(() => chase.release());
 fCtl.add(chase.params, 'sensitivity', 0.3, 8, 0.1).name('mouse sensitivity');
 fCtl.add(chase.params, 'invertY').name('invert mouse Y');
+fCtl.add(chase.params, 'keyYawRate', 0.3, 6, 0.1).name('Shift+A/D turn rate (rad/s)');
+fCtl.add(chase.params, 'keyYawResponse', 1, 20, 0.5).name('turn wind-up (1/s)');
 fCtl.add(prop.params, 'boost', 1, 3, 0.05).name('Shift boost ×');
 fCtl.add(prop.params, 'boostRunup', 1, 5, 0.1).name('boost run-up ×');
 fCtl.add(robotUi, 'invertPitch').name('tank: invert pitch (Shift+W/S)');
@@ -357,6 +362,14 @@ fThrust.add(pp, 'floorFollow', 1, 20, 0.5).name('seafloor follow (1/s)');
 fThrust.add(pp, 'gravity', 0, 20, 0.1).name('gravity (m/s²)');
 fThrust.add(pp, 'clearance', 0, 2, 0.05).name('ground clearance (m)');
 fThrust.add(pp, 'eyeResponse', 0.5, 20, 0.5).name('eye tracking (1/s)');
+const fTouch = fRobot.addFolder('Contact');
+fTouch.close();
+fTouch.add(contact.params, 'recoil', 0, 9, 0.1).name('recoil kick (m/s)');
+fTouch.add(prop.params, 'contactRestitution', 0, 1, 0.05).name('bounce (× approach speed)');
+fTouch.add(contact.params, 'cooldown', 0.1, 2, 0.05).name('re-trigger after (s)');
+fTouch.add(contact.params, 'halo', 0, 1.5, 0.05).name('pain halo strength');
+fTouch.add(contact.params, 'painDecay', 0.3, 8, 0.1).name('halo fade (1/s)');
+fTouch.add(contact.params, 'bubbles', 0, 3, 0.1).name('contact bubbles');
 const fJets = fRobot.addFolder('Exhaust');
 const jp = jets.params;
 fJets.add(jp, 'bubblesPerPuff', 0, 120, 1).name('bubbles per puff');
@@ -397,7 +410,9 @@ fSea.add(sp, 'slugCount', 0, 2, 1).name('slugs').onChange(() => sealife.applyPar
 fSea.add(sp, 'cutisScale', 1, 6, 0.1).name('membrane scale').onChange(() => sealife.applyParams());
 fSea.add(sp, 'walkerScale', 5, 60, 1).name('walker scale (Nih-Dairia, Filament)').onChange(() => sealife.applyParams());
 fSea.add(sp, 'crawlerScale', 2, 20, 0.5).name('crawler scale (slug, snake)').onChange(() => sealife.applyParams());
-fSea.add(sp, 'huntRadius', 0, 40, 0.5).name('react to the robot within (m)');
+fSea.add(sp, 'scentRadius', 0, 300, 5).name('smell the robot within (m)');
+fSea.add(sp, 'aggression', 0.2, 4, 0.1).name('hunting urgency (× lab)').onFinishChange(() => sealife.applyParams());
+fSea.add(sp, 'crawlersApproach').name('slugs and snake come too').onChange(() => sealife.applyParams());
 fSea.add(sp, 'simRadius', 20, 600, 10).name('simulate soft bodies within (m)');
 fSea.add(sp, 'lureRange', 0.5, 6, 0.1).name('colony wander range');
 fSea.add(sp, 'lureSpeed', 0, 1, 0.01).name('colony wander speed');
@@ -655,11 +670,13 @@ function renderFrame(dt) {
   // the robot runs at a fixed 120 Hz under the frame, on the same clock
   robot.carrier.visible = robot.enabled && elements.robot;
   if (robot.enabled && elements.robot && dt > 0) {
-    prop.look.yaw = chase.look.yaw; prop.look.pitch = chase.look.pitch;
     const input = driveInput(), ground = islandHeight(prop.position[0], prop.position[2]);
+    if (prop.params.scheme === 'mouselook') chase.keyTurn((input.yawLeft ? 1 : 0) - (input.yawRight ? 1 : 0), dt);
+    prop.look.yaw = chase.look.yaw; prop.look.pitch = chase.look.pitch;
     for (let left = dt; left > 1e-6; left -= 1 / 120) prop.step(Math.min(left, 1 / 120), input, { waterHeight: robotWater, groundHeight: ground });
     for (const e of prop.drainEvents()) {
       if (e.type === 'puff') { jets.emit([e.x, e.y, e.z], e.dir, prop.params.radius, e.strength, e.submerged, e.t); continue; }
+      if (e.type === 'contact') continue;   // handled where the hit is found
       if (e.type === 'land') {
         // a hard arrival on the bottom: wet sand or seabed silt thrown up, bubbles if under water
         const n = Math.round(jets.params.sandBurst * Math.min(320, 40 + e.speed * 20)), foot = [e.x, e.y - prop.params.radius * 0.9, e.z];
@@ -678,9 +695,30 @@ function renderFrame(dt) {
     }
     if (!prop.sane) { console.error('propulsion state went non-finite; re-placing the robot', { water: robotWater, ground }); placeRobot(); }
     robot.body.pos.fromArray(prop.position);
+    // the sphere against the creatures (their shapes from the last sea-life step): the deepest
+    // hit pushes it clear; a fresh touch also kicks it back, flares the halo and startles the creature
+    if (elements.sealife) {
+      const hits = sealife.collide(robot.body.pos, prop.params.radius);
+      if (hits.length) {
+        const h = hits[0], since = prop.time - (contact.cool.get(h.key) ?? -1e9);
+        if (since > contact.params.cooldown) {
+          const kick = prop.contact(h.normal, h.depth, contact.params.recoil);
+          contact.cool.set(h.key, prop.time); contact.count++; contact.last = h.label; contact.lastT = prop.time;
+          contact.pain = Math.min(1, 0.5 + kick * 0.08);
+          h.creature.disturb?.();
+          const n = Math.round(contact.params.bubbles * (24 + kick * 6));
+          if (prop.submerged > 0.3) jets.burst(h.point, 0, n, 1.2 + kick * 0.2, prop.time); else jets.burst(h.point, 3, n, 1.5 + kick * 0.25, prop.time);
+        } else { contact.cool.set(h.key, prop.time); prop.contact(h.normal, h.depth, 0); }
+        robot.body.pos.fromArray(prop.position);
+      }
+    }
+    if (!prop.sane) { console.error('contact pushed the propulsion state non-finite; re-placing the robot'); placeRobot(); robot.body.pos.fromArray(prop.position); }
     if (robot.rig) applyPose(robot.carrier, robot.rig, prop, robot.explode);
   }
   jets.points.visible = robot.enabled && elements.robot;
+  contact.pain = Math.max(0, contact.pain - dt * contact.params.painDecay);
+  const halo = robot.enabled && elements.robot ? contact.pain * contact.params.halo : 0;
+  if (painEl) { painEl.style.opacity = halo.toFixed(3); painEl.hidden = halo <= 0.001; }
   jets.update(prop.time, camera, hdrRT.height);
   sealife.visible = elements.sealife;
   if (elements.sealife) {
@@ -829,7 +867,7 @@ async function measureElements(frames = 120, rounds = 3) {
 }
 window.WATER = {
   camera, controls, sky, post, surface, ocean, terrain, timer, views, quality, renderer, floaters, query, underwater, spray, snow, caustics, floatShadow,
-  gui, ui, shell, robot, prop, chase, jets, sealife, elements, measure: measureElements, keys, radar, expoTrips: () => expoTrips, queryNaNs: () => queryNaNs, queryNaNLog, elapsed: () => elapsed, camWater: () => camWater, robotWater: () => robotWater, markSun: () => (sunDirty = true),
+  gui, ui, shell, robot, prop, chase, jets, sealife, elements, measure: measureElements, keys, radar, contact, expoTrips: () => expoTrips, queryNaNs: () => queryNaNs, queryNaNLog, elapsed: () => elapsed, camWater: () => camWater, robotWater: () => robotWater, markSun: () => (sunDirty = true),
 };
 
 // --- HUD + loop ------------------------------------------------------------------
@@ -905,7 +943,8 @@ function updateHud(now) {
   hud.textContent = text;
   const mode = prop.seafloor ? 'SEAFLOOR' : prop.submerged > 0.5 ? 'SUBMERGED' : prop.submerged > 0 ? 'AWASH' : 'AIR';
   const hint = robot.enabled && prop.params.scheme === 'mouselook' ? (chase.params.lookMode === 'pointer-lock' ? (chase.locked ? ' · Esc releases the mouse' : ' · click the water to capture the mouse') : chase.params.lookMode === 'drag' ? ' · drag to look' : '') : '';
-  const tele = robot.enabled ? `${mode} · ${prop.speed.toFixed(1)} m/s · depth ${Math.max(0, robotWater - prop.position[1]).toFixed(1)} m · run-up ${(prop.runup * 100).toFixed(0)}%${hint}` : '';
+  const touch = contact.count ? ` · touches ${contact.count}${prop.time - contact.lastT < 2 ? ` · CONTACT ${contact.last}` : ''}` : '';
+  const tele = robot.enabled ? `${mode} · ${prop.speed.toFixed(1)} m/s · depth ${Math.max(0, robotWater - prop.position[1]).toFixed(1)} m · run-up ${(prop.runup * 100).toFixed(0)}%${touch}${hint}` : '';
   shell.overlay(ui.fpsOverlay || robot.enabled ? [ui.fpsOverlay ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms · ${size.x}×${size.y}` : '', tele, ui.paused ? 'paused' : ''].filter(Boolean).join('\n') : '');
   frames = 0;
   lastHud = now;

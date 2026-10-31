@@ -9,16 +9,20 @@ import { DEFAULT_CONFIG } from '../vendor/lab-creatures/cutis/swarm/config.js';
 import { CutisSwarm } from '../vendor/lab-creatures/cutis/swarm/controller.js';
 import { createSwarmGeometry } from '../vendor/lab-creatures/cutis/creature/geometry.js';
 import { createHardCores } from '../vendor/lab-creatures/cutis/creature/hard-core.js';
-import { createWalker, createCrawler, createGorogoro } from './creatures.js';
+import { createWalker, createCrawler, createGorogoro, tuneAggression, swarmContacts } from './creatures.js';
 
-const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _n = new THREE.Vector3();
 
 export class SeaLife {
   constructor({ patchMaterial } = {}) {
     this.params = {
-      cutisCount: 6, cutisScale: 2.5, mixedTiers: true, huntRadius: 10, lureRange: 2.2, lureSpeed: 0.22,
+      cutisCount: 6, cutisScale: 2.5, mixedTiers: true, lureRange: 2.2, lureSpeed: 0.22,
       gorogoroCount: 4, slugCount: 2, walkerScale: 24, crawlerScale: 11, simRadius: 160,
+      // the scent: every creature within this range of the sphere turns toward it and comes;
+      // aggression scales the Cutis lineage's hunting urgency (1 = the lab's own)
+      scentRadius: 60, aggression: 1.8, crawlersApproach: true,
     };
+    this.hits = [];           // the contacts found by the last collide()
     this.group = new THREE.Group();   // sits at the colony; the other sites are children with offsets
     this.group.name = 'Sea life';
     this.ready = false;
@@ -39,6 +43,7 @@ export class SeaLife {
     // --- the colony: Cutis-Maku swarm in its own scaled frame, plus the walking Nih-Dairia
     const config = { ...DEFAULT_CONFIG };
     const swarm = new CutisSwarm(config);
+    tuneAggression(swarm, P.aggression);
     swarm.reset(P.cutisCount);
     swarm.setMixed(P.mixedTiers);
     const model = createSwarmGeometry(swarm), cores = createHardCores(swarm);
@@ -62,7 +67,7 @@ export class SeaLife {
     const deep = this._site('deep', 'Filament · deep slope', new THREE.Vector3());
     this._add(deep, filament, 0, 0);
     const shallows = this._site('shallows', 'Cutis-gorogoro · awash sand', new THREE.Vector3());
-    this._add(shallows, createGorogoro(P.gorogoroCount, { patchMaterial: patch, scale: P.cutisScale }), 0, 0);
+    this._add(shallows, createGorogoro(P.gorogoroCount, { patchMaterial: patch, scale: P.cutisScale, aggression: P.aggression }), 0, 0);
     const beach = this._site('beach', 'Slugs and a Flat Snake · dry beach', new THREE.Vector3());
     this._add(beach, slugA, -6, 2); this._add(beach, slugB, 5, -3); this._add(beach, snake, 0, -9);
     if (P.slugCount < 2) slugB.group.visible = false;
@@ -134,6 +139,11 @@ export class SeaLife {
     }
     const slugs = this.creatures.filter((c) => c.variant === 'slug');
     slugs.forEach((s, i) => (s.group.visible = i < P.slugCount));
+    for (const c of this.creatures) {
+      if (c.kind === 'crawler') c.approach = P.crawlersApproach;
+      if (c.swarm && c.swarm.aggressionScale !== P.aggression) tuneAggression(c.swarm, P.aggression);
+    }
+    if (this.cutis && this.cutis.swarm.aggressionScale !== P.aggression) tuneAggression(this.cutis.swarm, P.aggression);
   }
 
   // robotWorld: the sphere's world position, or null. cameraWorld gates the soft-body sims.
@@ -145,7 +155,7 @@ export class SeaLife {
     let target = null;
     if (robotWorld) {
       const local = frame.worldToLocal(_v.copy(robotWorld));
-      if (Math.hypot(local.x, local.z) < P.huntRadius / P.cutisScale && Math.abs(local.y) < 6 / P.cutisScale) target = { x: local.x, z: local.z };
+      if (Math.hypot(local.x, local.z) < P.scentRadius / P.cutisScale) target = { x: local.x, z: local.z };
     }
     this.chasing = !!target;
     if (!target) {
@@ -165,13 +175,37 @@ export class SeaLife {
       let preyLocal = null;
       if (robotWorld) {
         const local = c.group.worldToLocal(_v.copy(robotWorld));
-        const reach = c.kind === 'gorogoro' ? P.huntRadius * 1.5 / c.scale : P.huntRadius / c.scale;
-        if (Math.hypot(local.x, local.z) < reach && Math.abs(local.y) < 6 / c.scale) preyLocal = local;
+        if (Math.hypot(local.x, local.z) < P.scentRadius / c.scale) preyLocal = local;
       }
       c.step(dt, preyLocal);
       if (preyLocal && c.kind !== 'crawler') this.chasing = true;
       this.simulated++;
     }
+  }
+
+  // The sphere against every creature near enough to matter. Returns hits in world space:
+  // { point, normal (creature -> sphere), depth (m), creature, label }. Sorted deepest first.
+  collide(robotWorld, radius, out = this.hits) {
+    out.length = 0;
+    if (!this.ready || !robotWorld) return out;
+    const P = this.params, { swarm, frame } = this.cutis;
+    const localR = frame.worldToLocal(_v.copy(robotWorld));
+    if (Math.hypot(localR.x, localR.z) < 40 / P.cutisScale) {
+      swarmContacts(swarm, localR, radius / P.cutisScale, {}, (h, i, part) => {
+        _w.set(h.x, h.y, h.z); frame.localToWorld(_w); _n.set(h.nx, h.ny, h.nz).transformDirection(frame.matrixWorld);
+        out.push({ point: _w.toArray(), normal: _n.toArray(), depth: h.depth * P.cutisScale, creature: this.cutis, label: `Cutis-Maku ${part}`, key: `cutis:${i}:${part}` });
+      });
+    }
+    for (const c of this.creatures) {
+      if (!c.group.visible || !c.contact) continue;
+      c.group.getWorldPosition(_w);
+      if (_w.distanceTo(robotWorld) > 40) continue;
+      const local = c.group.worldToLocal(_v.copy(robotWorld));
+      const hit = c.contact(local, radius / c.scale);
+      if (hit) out.push({ ...hit, creature: c, label: c.variant + (hit.part ? ` ${hit.part}` : ''), key: c.variant + (hit.part ? `:${hit.part}` : '') });
+    }
+    out.sort((a, b) => b.depth - a.depth);
+    return out;
   }
 
   update(camera, viewportHeight) {
@@ -216,6 +250,7 @@ export class SeaLife {
       gorogoro: this.creatures.find((c) => c.kind === 'gorogoro')?.swarm.count ?? 0,
       softBodies: this.creatures.reduce((n, c) => n + (c.group.visible ? c.softBodies : 0), 0),
       simulated: this.simulated,
+      hits: this.hits.map((h) => h.label),
       sites: this.sites.map((s) => ({ id: s.id, at: s.world.toArray().map((v) => +v.toFixed(1)) })),
     };
   }

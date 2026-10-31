@@ -210,6 +210,42 @@ triangle draw plus a few hundred particles and never rises above the run-to-
 run noise (about ±0.3 ms here). These are desktop GPU numbers taken while a
 headless browser ran the test; they say nothing about a phone.
 
+### Keyboard turn
+
+Shift+A and Shift+D turn the look (and so the body, under the facing policy) at a smooth
+rate instead of strafing: `ChaseCamera.keyTurn()` eases a yaw velocity toward ±2.2 rad/s
+with a 6/s response, in both directions, so a tap nudges, a hold sweeps and a release winds
+down rather than stopping dead. Shift still boosts with W/S and still dives with Space.
+Rate and wind-up are in Robot ▸ Controls. This gives the pilot a way to re-orient without
+the mouse, which matters on the seabed and whenever the pointer is not captured.
+
+## v2 · contact with the sea life, and the scent
+
+The sphere now registers a touch against every creature. No damage: a jolt, a red halo
+and a record. The geometry is the creatures' own: a Cutis membrane is a sphere resting on
+the ground (plus its hard core where the tier has one), a soft body is tested against its
+nearest cage particle, so a tentacle wrapping the sphere counts and a limb lifted over it
+does not. `SeaLife.collide()` returns hits in world space, deepest first; `Propulsion.contact()`
+pushes the sphere clear, removes its velocity into the creature and adds a kick along the
+normal (`contactRecoil` 3.2 m/s plus half the approach speed, capped at 9) and halves the
+run-up. A fresh touch (0.45 s cool-down per creature part) flares the halo (`#pain`, an inset
+red box-shadow and radial vignette, opacity driven per frame, fading at 2.2/s), vents a
+burst of bubbles (droplets in air) at the contact point, startles the creature (the lab's
+own `disturb()`: a short recoil, then it comes back) and shows `touches N · CONTACT <who>`
+in the telemetry. All of it is in Robot ▸ Contact.
+
+The scent replaces the old 10 m reaction radius. Every creature within `scentRadius`
+(60 m, Sea life folder) of the sphere turns toward it: the Cutis colony and the gorogoro
+pack take the sphere as their lure outright; a walker's lure is clamped to one stride ahead
+of its body toward the sphere so the lab's behaviour stays in its stalking band and keeps
+walking; the crawlers nose toward it instead of away (`crawlersApproach`). `aggression`
+(1.8× the lab's) scales the Cutis lineage's hunting urgency through a cached copy of each
+tier's config: urgency ×k, cycle ÷k, reach up a little. Measured with the sphere parked
+22 m off the colony: the Nih-Dairia closes from 14 m to contact in about 14 s, is kicked
+back, and returns; the six Cutis close about 20 m in 25 s at the previous cycle, faster now;
+the gorogoro pack reaches a sphere 12 m off in under 20 s; the slugs and the snake come at a
+crawl. The Filament at the deep site is beyond scent of the other sites and stays listening.
+
 ## Fit for Stalheart
 
 This is a WebGL2 reference on three r186, not an r160 explosion module, and it

@@ -30,6 +30,9 @@ export const DEFAULTS = {
   boostRunup: 2,       // run-up gathers this much faster while boosting
   mass: 85,            // kg, nominal (manifest); only reported, forces are per unit mass
   radius: 0.8336,      // rolling support radius from the manifest
+  contactRecoil: 3.2,  // m/s kick away from a creature on touch
+  contactRestitution: 0.5, // fraction of the approach speed given back as extra kick
+  contactRecoilMax: 9, // m/s cap on the kick
   thrust: 22,          // m/s² along forward / right at zero run-up
   lift: 26,            // m/s² along world up (Space) or down (Shift+Space)
   runupTime: 5,        // s of continuous thrust to reach full run-up
@@ -141,6 +144,25 @@ export class Propulsion {
   get thrustScale() { return 1 + this.runup * this.params.runupGain; }
 
   drainEvents() { return this.events.splice(0); }
+
+  // A touch with something solid or alive: `normal` points from the obstacle to the sphere,
+  // `depth` is the overlap. The sphere is pushed clear, its velocity into the obstacle is
+  // taken away and a recoil kick is added along the normal (no damage, a jolt). Returns the
+  // kick that was applied; 0 when the normal was unusable.
+  contact(normal, depth = 0, recoil = this.params.contactRecoil) {
+    const n = Math.hypot(normal[0], normal[1], normal[2]);
+    if (!(n > 1e-6) || !Number.isFinite(depth)) return 0;
+    const nx = normal[0] / n, ny = normal[1] / n, nz = normal[2] / n, p = this.position, v = this.velocity;
+    const push = clamp(depth, 0, this.params.radius);
+    p[0] += nx * push; p[1] += ny * push; p[2] += nz * push;
+    const into = v[0] * nx + v[1] * ny + v[2] * nz;        // velocity toward the obstacle is negative along n
+    const kick = Math.min(this.params.contactRecoilMax, recoil + Math.max(0, -into) * this.params.contactRestitution);
+    if (into < 0) { v[0] -= into * nx; v[1] -= into * ny; v[2] -= into * nz; }
+    v[0] += nx * kick; v[1] += ny * kick; v[2] += nz * kick;
+    this.runup *= 0.5;                                       // the jolt breaks the run-up
+    this.events.push({ type: 'contact', kick, into, x: p[0], y: p[1], z: p[2], nx, ny, nz, t: this.time, submerged: this.submerged });
+    return kick;
+  }
 
   _vent(channel, dir, strength) {
     const p = this.position;
@@ -272,7 +294,7 @@ export class Propulsion {
 }
 
 // Key set -> input. Mouselook: WASD strafe, Space up, C / Ctrl / Shift+Space down, Shift
-// boosts. Tank: Shift is the modifier that turns WASD into pitch / yaw and Space into down.
+// boosts, Shift+A/D turns the look. Tank: Shift is the modifier that turns WASD into pitch / yaw and Space into down.
 export function inputFromKeys(keys, scheme = 'mouselook') {
   const has = (...codes) => codes.some((c) => keys.has(c));
   const shift = has('ShiftLeft', 'ShiftRight');
@@ -286,11 +308,15 @@ export function inputFromKeys(keys, scheme = 'mouselook') {
       pitchDown: w && shift, pitchUp: s && shift,
     };
   }
+  // Shift+A/D is a keyboard turn: a smooth yaw of the look (and so of the body), for
+  // re-orienting without the mouse. Shift otherwise boosts.
   const down = has('KeyC', 'ControlLeft', 'ControlRight') || (space && shift);
+  const turning = shift && (a || d);
   return {
     ...NO_INPUT,
-    forward: w, back: s, left: a, right: d,
+    forward: w, back: s, left: a && !shift, right: d && !shift,
     up: space && !shift, down,
-    boost: shift && !space,
+    yawLeft: a && shift, yawRight: d && shift,
+    boost: shift && !space && !turning,
   };
 }

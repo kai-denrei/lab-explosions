@@ -31,6 +31,7 @@
 <main id="stage" aria-label="Procedural ocean viewer">
   <!-- the WebGL canvas is appended here by main.js -->
   <div id="overlay" hidden aria-live="off"></div>
+  <div id="pain" hidden aria-hidden="true"></div>
   <div id="loading" role="status"><span>Baking the sea…</span></div>
   <div id="failure" role="alert" hidden>
     <h1>This device cannot run the water.</h1>
@@ -82,7 +83,7 @@
 
     <div id="settings"></div>
 
-    <p class="keys"><b>Robot · mouselook scheme</b> · click the water to capture the mouse, Esc releases<br>Mouse looks · W/S thrust along the look, back-pedal · A/D strafe · Space up · C or Shift+Space down · Shift boost<br>Shift+Space onto the seabed parks it there (seafloor mode); Space lifts off · R re-place · V free camera<br>Tank scheme (Robot ▸ Controls): W along the body, Shift+A/D yaw, Shift+W/S pitch<br>Radar bottom-right: green blips are Cutis-Maku, amber ring the Nih-Dairia, cyan the colony<br>Wheel to zoom · double-click recentres · F fullscreen · P pause · 1–4 view filter · Esc closes this panel</p>
+    <p class="keys"><b>Robot · mouselook scheme</b> · click the water to capture the mouse, Esc releases<br>Mouse looks · W/S thrust along the look, back-pedal · A/D strafe · Shift+A/D turn smoothly · Space up · C or Shift+Space down · Shift boost<br>Shift+Space onto the seabed parks it there (seafloor mode); Space lifts off · R re-place · V free camera<br>Tank scheme (Robot ▸ Controls): W along the body, Shift+A/D yaw, Shift+W/S pitch<br>Radar bottom-right: green blips are Cutis-Maku, amber ring the Nih-Dairia, cyan the colony<br>Wheel to zoom · double-click recentres · F fullscreen · P pause · 1–4 view filter · Esc closes this panel</p>
 
     <h2>Research notebook</h2>
     <details open>
